@@ -1,0 +1,8 @@
+  private createTray(): void {
+    // Создание ПРАВИЛЬНОЙ Template иконки для macOS (белая на прозрачном фоне)
+    const trayIcon = nativeImage.createFromPath(
+      path.join(__dirname, '../../assets/tray-icon-template.png')
+    );
+    trayIcon.setTemplateImage(true); // ВАЖНО: Template режим для правильной видимости на macOS
+    
+    this.tray = new Tray(trayIcon);

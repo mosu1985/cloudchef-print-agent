@@ -1,0 +1,115 @@
+{
+  "name": "cloudchef-print-agent",
+  "version": "1.0.0",
+  "description": "CloudChef Print Agent - Desktop приложение для печати этикеток",
+  "main": "dist/main/main.js",
+  "author": "CloudChef Team",
+  "license": "MIT",
+  "private": true,
+  "homepage": "./",
+  "scripts": {
+    "dev": "concurrently \"npm run build:watch\" \"npm run electron:dev\"",
+    "build": "tsc && npm run build:renderer",
+    "build:watch": "tsc -w",
+    "build:renderer": "webpack --mode production",
+    "build:dev": "webpack --mode development", 
+    "electron:dev": "wait-on ./dist/main/main.js && electron .",
+    "electron:pack": "npm run build && electron-builder",
+    "electron:dist": "npm run build && electron-builder --publish=never",
+    "electron:publish": "npm run build && electron-builder --publish=always",
+    "release:patch": "npm version patch && git push origin --tags",
+    "release:minor": "npm version minor && git push origin --tags", 
+    "release:major": "npm version major && git push origin --tags",
+    "postinstall": "electron-builder install-app-deps",
+    "test:first-run": "node test-first-run.js"
+  },
+  "dependencies": {
+    "auto-launch": "^5.0.6",
+    "electron-log": "^5.0.3",
+    "electron-store": "^8.2.0",
+    "socket.io-client": "^4.7.5"
+  },
+  "devDependencies": {
+    "@types/auto-launch": "^5.0.5",
+    "@types/node": "^20.10.5",
+    "concurrently": "^8.2.2",
+    "css-loader": "^6.8.1",
+    "electron": "^28.1.0",
+    "electron-builder": "^24.9.1",
+    "electron-updater": "^6.1.7",
+    "html-webpack-plugin": "^5.6.0",
+    "style-loader": "^3.3.3",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.3.3",
+    "wait-on": "^7.2.0",
+    "webpack": "^5.89.0",
+    "webpack-cli": "^5.1.4"
+  },
+  "build": {
+    "appId": "com.cloudchef.printagent",
+    "productName": "CloudChef Print Agent",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "assets/**/*",
+      "app-update.yml"
+    ],
+    "extraResources": [
+      {
+        "from": "app-update.yml",
+        "to": "app-update.yml"
+      }
+    ],
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["universal"]
+        }
+      ],
+      "icon": "assets/icon.icns",
+      "category": "public.app-category.utilities",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "assets/icon.ico",
+      "publisherName": "CloudChef Team",
+      "verifyUpdateCodeSignature": false
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "assets/icon.png",
+      "category": "Utility"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": false,
+      "createStartMenuShortcut": true,
+      "shortcutName": "CloudChef Print Agent",
+      "include": "build/installer.nsh"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "mosu1985",
+      "repo": "cloudchef-print-agent",
+      "releaseType": "release"
+    }
+  }
+}

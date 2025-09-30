@@ -1,0 +1,809 @@
+import { AppSettings, ConnectionStatus, PrinterInfo, PrintJob } from '../shared/types';
+
+// 📱 Класс управления приложением
+class PrintAgentApp {
+  private settings: AppSettings | null = null;
+  private connectionStatus: ConnectionStatus = 'disconnected';
+  private printers: PrinterInfo[] = [];
+  private selectedPrinter: string = '';
+  private printLabels: Array<{
+    id: string;
+    labelData: any;
+    status: 'received' | 'printing' | 'completed' | 'error';
+    timestamp: Date;
+    jobId: string;
+    errorMessage?: string;
+  }> = [];
+  private autoScroll: boolean = true;
+
+  constructor() {
+    this.init();
+  }
+
+  private async init(): Promise<void> {
+    // Загрузка версии приложения
+    await this.loadAppVersion();
+    
+    // Загрузка настроек
+    await this.loadSettings();
+    
+    // Загрузка статуса подключения
+    await this.loadConnectionStatus();
+    
+    // Загрузка принтеров
+    await this.loadPrinters();
+    
+    // Инициализация монитора этикеток
+    this.initLabelMonitor();
+    
+    // Настройка обработчиков событий
+    this.setupEventListeners();
+    
+    // Настройка слушателей от main процесса
+    this.setupMainProcessListeners();
+  }
+
+  private async loadAppVersion(): Promise<void> {
+    try {
+      const version = await window.electronAPI.getAppVersion();
+      const versionElement = document.getElementById('app-version');
+      if (versionElement) {
+        versionElement.textContent = `v${version}`;
+      }
+    } catch (error) {
+      // Используем alert для ошибок в renderer процессе
+      this.showNotification('Ошибка загрузки версии', 'error');
+    }
+  }
+
+  private async loadSettings(): Promise<void> {
+    try {
+      this.settings = await window.electronAPI.getSettings();
+      this.updateSettingsUI();
+    } catch (error) {
+      this.showNotification('Ошибка загрузки настроек', 'error');
+    }
+  }
+
+  private async loadConnectionStatus(): Promise<void> {
+    try {
+      const status = await window.electronAPI.getConnectionStatus();
+      this.connectionStatus = status.status;
+      this.updateConnectionStatusUI();
+    } catch (error) {
+      this.showNotification('Ошибка загрузки статуса подключения', 'error');
+    }
+  }
+
+  private async loadPrinters(): Promise<void> {
+    try {
+      this.printers = await window.electronAPI.getPrinters();
+      this.updatePrintersUI();
+    } catch (error) {
+      this.showNotification('Ошибка загрузки принтеров', 'error');
+    }
+  }
+
+  private setupEventListeners(): void {
+    // Навигация по вкладкам
+    document.querySelectorAll('[data-tab]').forEach(button => {
+      button.addEventListener('click', (e) => {
+        const target = e.target as HTMLButtonElement;
+        const tabName = target.getAttribute('data-tab');
+        if (tabName) {
+          this.switchTab(tabName);
+        }
+      });
+    });
+
+    // Управление окном
+    const minimizeBtn = document.getElementById('minimize-btn');
+    if (minimizeBtn) {
+      minimizeBtn.addEventListener('click', () => {
+        window.electronAPI.minimizeToTray();
+      });
+    }
+
+    // Подключение
+    const connectBtn = document.getElementById('connect-btn');
+    if (connectBtn) {
+      connectBtn.addEventListener('click', () => this.handleConnect());
+    }
+
+    const disconnectBtn = document.getElementById('disconnect-btn');
+    if (disconnectBtn) {
+      disconnectBtn.addEventListener('click', () => this.handleDisconnect());
+    }
+
+    // Принтеры
+    const refreshPrintersBtn = document.getElementById('refresh-printers-btn');
+    if (refreshPrintersBtn) {
+      refreshPrintersBtn.addEventListener('click', () => this.loadPrinters());
+    }
+
+    // Настройки
+    const saveSettingsBtn = document.getElementById('save-settings-btn');
+    if (saveSettingsBtn) {
+      saveSettingsBtn.addEventListener('click', () => this.handleSaveSettings());
+    }
+
+    // Обновления
+    const checkUpdatesBtn = document.getElementById('check-updates-btn');
+    if (checkUpdatesBtn) {
+      checkUpdatesBtn.addEventListener('click', () => this.handleCheckUpdates());
+    }
+
+    // Логи
+    const openLogsBtn = document.getElementById('open-logs-btn');
+    if (openLogsBtn) {
+      openLogsBtn.addEventListener('click', () => {
+        window.electronAPI.openLogs();
+      });
+    }
+
+    // Код ресторана - автоформатирование
+    const restaurantCodeInput = document.getElementById('restaurant-code') as HTMLInputElement;
+    if (restaurantCodeInput) {
+      restaurantCodeInput.addEventListener('input', (e) => {
+        const target = e.target as HTMLInputElement;
+        // Оставляем только цифры
+        target.value = target.value.replace(/[^0-9]/g, '').substring(0, 6);
+      });
+    }
+
+    // Монитор этикеток
+    const autoScrollBtn = document.getElementById('auto-scroll-btn');
+    if (autoScrollBtn) {
+      autoScrollBtn.addEventListener('click', () => this.toggleAutoScroll());
+    }
+
+    const clearLabelsBtn = document.getElementById('clear-labels-btn');
+    if (clearLabelsBtn) {
+      clearLabelsBtn.addEventListener('click', () => this.clearLabelHistory());
+    }
+  }
+
+  private setupMainProcessListeners(): void {
+    // Изменение статуса подключения
+    window.electronAPI.onConnectionStatusChanged((status) => {
+      this.connectionStatus = status;
+      this.updateConnectionStatusUI();
+    });
+
+    // Получение задания на печать
+    console.log('🔧 RENDERER: Настройка обработчика onPrintJobReceived...');
+    document.title = '🔧 RENDERER: Обработчик настроен';
+    
+    window.electronAPI.onPrintJobReceived((job) => {
+      console.log('📨 RENDERER: IPC событие получено!', job);
+      document.title = `📨 RENDERER: Получен job ${job.jobId}`;
+      
+      // Показываем уведомление с правильными полями (автоматически закрывается)
+      this.showNotification(
+        `🖨️ Получена этикетка "${job.labelData.category}" от ${job.labelData.preparerName}`,
+        'info'
+      );
+      
+      this.handlePrintJob(job);
+    });
+
+    // Обновления приложения
+    window.electronAPI.onUpdateAvailable(() => {
+      this.showNotification('Доступно обновление приложения', 'info');
+      const updateStatus = document.getElementById('update-status');
+      if (updateStatus) {
+        updateStatus.innerHTML = `
+          <div class="status-indicator" style="background: rgba(54, 162, 235, 0.1); color: #3498db; border-color: rgba(54, 162, 235, 0.2);">
+            <span>📥</span>
+            <span>Загружается обновление...</span>
+          </div>
+        `;
+      }
+    });
+
+    window.electronAPI.onUpdateDownloaded(() => {
+      this.showNotification('Обновление загружено. Перезапустите приложение.', 'success');
+      const updateStatus = document.getElementById('update-status');
+      if (updateStatus) {
+        updateStatus.innerHTML = `
+          <div class="status-indicator status-connected">
+            <span>✅</span>
+            <span>Обновление готово к установке</span>
+          </div>
+          <button class="btn btn-primary" id="restart-and-update-btn" style="margin-top: 12px;">
+            <span>🔄</span>
+            Перезапустить и обновить
+          </button>
+        `;
+        
+        const restartBtn = document.getElementById('restart-and-update-btn');
+        if (restartBtn) {
+          restartBtn.addEventListener('click', () => {
+            window.electronAPI.restartAndUpdate();
+          });
+        }
+      }
+    });
+  }
+
+  private switchTab(tabName: string): void {
+    // Убираем активный класс со всех вкладок
+    document.querySelectorAll('.nav-link').forEach(link => {
+      link.classList.remove('active');
+    });
+    
+    document.querySelectorAll('.tab-content').forEach(content => {
+      content.classList.remove('active');
+    });
+
+    // Добавляем активный класс к выбранной вкладке
+    const activeLink = document.querySelector(`[data-tab="${tabName}"]`);
+    const activeContent = document.getElementById(`${tabName}-tab`);
+    
+    if (activeLink && activeContent) {
+      activeLink.classList.add('active');
+      activeContent.classList.add('active');
+    }
+  }
+
+  private updateSettingsUI(): void {
+    if (!this.settings) return;
+
+    // URL сервера
+    const serverUrlInput = document.getElementById('server-url') as HTMLInputElement;
+    if (serverUrlInput) {
+      serverUrlInput.value = this.settings.serverUrl;
+    }
+
+    // Код ресторана
+    const restaurantCodeInput = document.getElementById('restaurant-code') as HTMLInputElement;
+    if (restaurantCodeInput) {
+      restaurantCodeInput.value = this.settings.restaurantCode;
+    }
+
+    // Чекбоксы
+    const autoLaunchCheckbox = document.getElementById('auto-launch') as HTMLInputElement;
+    if (autoLaunchCheckbox) {
+      autoLaunchCheckbox.checked = this.settings.autoLaunch;
+    }
+
+    const minimizeToTrayCheckbox = document.getElementById('minimize-to-tray') as HTMLInputElement;
+    if (minimizeToTrayCheckbox) {
+      minimizeToTrayCheckbox.checked = this.settings.minimizeToTray;
+    }
+
+    const notificationsCheckbox = document.getElementById('notifications') as HTMLInputElement;
+    if (notificationsCheckbox) {
+      notificationsCheckbox.checked = this.settings.notifications;
+    }
+
+    // Выбранный принтер
+    this.selectedPrinter = this.settings.selectedPrinter;
+  }
+
+  private updateConnectionStatusUI(): void {
+    const statusElement = document.getElementById('connection-status');
+    if (!statusElement) return;
+
+    // Очищаем предыдущие классы
+    statusElement.className = 'status-indicator';
+    
+    let icon = '';
+    let text = '';
+    let statusClass = '';
+
+    switch (this.connectionStatus) {
+      case 'connected':
+        icon = '🟢';
+        text = 'Подключено к ресторану';
+        statusClass = 'status-connected';
+        break;
+      case 'server-connected':
+        icon = '🟢';
+        text = 'Подключено к серверу';
+        statusClass = 'status-connected';
+        break;
+      case 'disconnected':
+        icon = '🔴';
+        text = 'Отключено';
+        statusClass = 'status-disconnected';
+        break;
+      case 'error':
+        icon = '❌';
+        text = 'Ошибка подключения';
+        statusClass = 'status-error';
+        break;
+      default:
+        icon = '⚪';
+        text = 'Неизвестный статус';
+        statusClass = 'status-disconnected';
+    }
+
+    statusElement.className = `status-indicator ${statusClass}`;
+    statusElement.innerHTML = `<span>${icon}</span><span>${text}</span>`;
+  }
+
+  private updatePrintersUI(): void {
+    const printerList = document.getElementById('printer-list');
+    if (!printerList) return;
+
+    printerList.innerHTML = '';
+
+    if (this.printers.length === 0) {
+      printerList.innerHTML = `
+        <li style="text-align: center; padding: 20px; color: #718096;">
+          Принтеры не найдены. Убедитесь, что принтеры установлены и включены.
+        </li>
+      `;
+      return;
+    }
+
+    this.printers.forEach(printer => {
+      const li = document.createElement('li');
+      li.className = `printer-item ${printer.name === this.selectedPrinter ? 'selected' : ''}`;
+      li.addEventListener('click', () => this.selectPrinter(printer.name));
+
+      const statusIcon = this.getPrinterStatusIcon(printer.status);
+      const typeText = this.getPrinterTypeText(printer.type);
+      const defaultText = printer.isDefault ? ' (по умолчанию)' : '';
+
+      li.innerHTML = `
+        <div class="printer-info">
+          <h4>${printer.displayName}${defaultText}</h4>
+          <p>${typeText}</p>
+        </div>
+        <div class="printer-actions">
+          <div class="printer-status status-${printer.status}">
+            <span>${statusIcon}</span>
+            <span>${this.getStatusText(printer.status)}</span>
+          </div>
+          <button class="btn btn-secondary" data-printer="${printer.name}" style="margin-top: 8px; font-size: 12px; padding: 6px 12px;">
+            <span>🧪</span>
+            Тест
+          </button>
+        </div>
+      `;
+
+      // Обработчик кнопки тестирования
+      const testBtn = li.querySelector(`[data-printer="${printer.name}"]`);
+      if (testBtn) {
+        testBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.testPrinter(printer.name);
+        });
+      }
+
+      printerList.appendChild(li);
+    });
+  }
+
+  private selectPrinter(printerName: string): void {
+    this.selectedPrinter = printerName;
+    this.updatePrintersUI();
+    
+    // Сохраняем выбор
+    this.saveSettings({ selectedPrinter: printerName });
+    
+    this.showNotification(`Выбран принтер: ${printerName}`, 'success');
+  }
+
+  private async testPrinter(printerName: string): Promise<void> {
+    const testBtn = document.querySelector(`[data-printer="${printerName}"]`) as HTMLButtonElement;
+    if (testBtn) {
+      testBtn.innerHTML = '<span class="spinner"></span> Тестирование...';
+      testBtn.disabled = true;
+    }
+
+    try {
+      const result = await window.electronAPI.testPrinter(printerName);
+      
+      if (result.success) {
+        this.showNotification(`Тест печати выполнен успешно`, 'success');
+      } else {
+        this.showNotification(`Ошибка тестирования: ${result.error}`, 'error');
+      }
+    } catch (error) {
+      this.showNotification(`Ошибка тестирования: ${error}`, 'error');
+    } finally {
+      if (testBtn) {
+        testBtn.innerHTML = '<span>🧪</span> Тест';
+        testBtn.disabled = false;
+      }
+    }
+  }
+
+  private async handleConnect(): Promise<void> {
+    const restaurantCodeInput = document.getElementById('restaurant-code') as HTMLInputElement;
+    const connectBtn = document.getElementById('connect-btn') as HTMLButtonElement;
+    
+    if (!restaurantCodeInput || !connectBtn) return;
+
+    const code = restaurantCodeInput.value.trim();
+    
+    if (code.length !== 6 || !/^[0-9]{6}$/.test(code)) {
+      this.showNotification('Введите корректный 6-значный код ресторана', 'error');
+      return;
+    }
+
+    connectBtn.innerHTML = '<span class="spinner"></span> Подключение...';
+    connectBtn.disabled = true;
+
+    try {
+      const result = await window.electronAPI.connectToRestaurant(code);
+      
+      if (result.success) {
+        this.showNotification('Подключение к ресторану...', 'info');
+        // Сохраняем код
+        await this.saveSettings({ restaurantCode: code });
+      } else {
+        this.showNotification(`Ошибка подключения: ${result.message}`, 'error');
+      }
+    } catch (error) {
+      this.showNotification(`Ошибка подключения: ${error}`, 'error');
+    } finally {
+      connectBtn.innerHTML = '<span>🔗</span> Подключиться';
+      connectBtn.disabled = false;
+    }
+  }
+
+  private async handleDisconnect(): Promise<void> {
+    const disconnectBtn = document.getElementById('disconnect-btn') as HTMLButtonElement;
+    
+    if (!disconnectBtn) return;
+
+    disconnectBtn.innerHTML = '<span class="spinner"></span> Отключение...';
+    disconnectBtn.disabled = true;
+
+    try {
+      await window.electronAPI.disconnect();
+      this.showNotification('Отключено от сервера', 'info');
+    } catch (error) {
+      this.showNotification(`Ошибка отключения: ${error}`, 'error');
+    } finally {
+      disconnectBtn.innerHTML = '<span>🚫</span> Отключиться';
+      disconnectBtn.disabled = false;
+    }
+  }
+
+  private async handleSaveSettings(): Promise<void> {
+    const saveBtn = document.getElementById('save-settings-btn') as HTMLButtonElement;
+    
+    if (!saveBtn) return;
+
+    const autoLaunch = (document.getElementById('auto-launch') as HTMLInputElement).checked;
+    const minimizeToTray = (document.getElementById('minimize-to-tray') as HTMLInputElement).checked;
+    const notifications = (document.getElementById('notifications') as HTMLInputElement).checked;
+
+    const settingsToSave: Partial<AppSettings> = {
+      autoLaunch,
+      minimizeToTray,
+      notifications,
+      selectedPrinter: this.selectedPrinter
+    };
+
+    saveBtn.innerHTML = '<span class="spinner"></span> Сохранение...';
+    saveBtn.disabled = true;
+
+    try {
+      await this.saveSettings(settingsToSave);
+      this.showNotification('Настройки сохранены', 'success');
+    } catch (error) {
+      this.showNotification(`Ошибка сохранения: ${error}`, 'error');
+    } finally {
+      saveBtn.innerHTML = '<span>💾</span> Сохранить настройки';
+      saveBtn.disabled = false;
+    }
+  }
+
+  private async handleCheckUpdates(): Promise<void> {
+    const checkBtn = document.getElementById('check-updates-btn') as HTMLButtonElement;
+    
+    if (!checkBtn) return;
+
+    checkBtn.innerHTML = '<span class="spinner"></span> Проверка...';
+    checkBtn.disabled = true;
+
+    try {
+      await window.electronAPI.checkForUpdates();
+      
+      setTimeout(() => {
+        const updateStatus = document.getElementById('update-status');
+        if (updateStatus) {
+          updateStatus.innerHTML = `
+            <div class="status-indicator status-connected">
+              <span>✅</span>
+              <span>Проверка завершена. Вы используете последнюю версию.</span>
+            </div>
+          `;
+        }
+      }, 2000);
+      
+    } catch (error) {
+      this.showNotification(`Ошибка проверки обновлений: ${error}`, 'error');
+    } finally {
+      checkBtn.innerHTML = '<span>🔍</span> Проверить обновления';
+      checkBtn.disabled = false;
+    }
+  }
+
+  private handlePrintJob(job: PrintJob): void {
+    console.log('🖨️ RENDERER: Получена команда печати!', job);
+    console.log('🖨️ RENDERER: Job ID:', job.jobId);
+    console.log('🖨️ RENDERER: Label Data:', job.labelData);
+    
+    // Добавляем этикетку в монитор
+    this.addLabelToMonitor(job);
+    
+    // Показываем уведомление с правильными полями
+    this.showNotification(`Новое задание: ${job.labelData.category}`, 'info');
+    
+    // Симулируем процесс печати
+    this.simulatePrinting(job.jobId);
+  }
+
+  private async saveSettings(settings: Partial<AppSettings>): Promise<void> {
+    await window.electronAPI.saveSettings(settings);
+    
+    // Обновляем локальные настройки
+    if (this.settings) {
+      this.settings = { ...this.settings, ...settings };
+    }
+  }
+
+  private getPrinterStatusIcon(status: string): string {
+    switch (status) {
+      case 'ready': return '✅';
+      case 'busy': return '🟡';
+      case 'error': return '❌';
+      case 'offline': return '⚪';
+      default: return '❓';
+    }
+  }
+
+  private getPrinterTypeText(type: string): string {
+    switch (type) {
+      case 'thermal': return 'Термопринтер';
+      case 'inkjet': return 'Струйный принтер';
+      case 'laser': return 'Лазерный принтер';
+      default: return 'Принтер';
+    }
+  }
+
+  private getStatusText(status: string): string {
+    switch (status) {
+      case 'ready': return 'Готов';
+      case 'busy': return 'Занят';
+      case 'error': return 'Ошибка';
+      case 'offline': return 'Отключен';
+      default: return 'Неизвестно';
+    }
+  }
+
+  private showNotification(message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info'): void {
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    notification.textContent = message;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+      if (document.body.contains(notification)) {
+        document.body.removeChild(notification);
+      }
+    }, 5000);
+  }
+
+  // 📄 Методы монитора этикеток
+  private initLabelMonitor(): void {
+    this.updateLabelCountBadge();
+    this.updateAutoScrollButton();
+  }
+
+  private addLabelToMonitor(job: PrintJob): void {
+    console.log('📄 RENDERER: Добавление этикетки в монитор...', job);
+    
+    const labelItem = {
+      id: `label_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      labelData: job.labelData,
+      status: 'received' as const,
+      timestamp: new Date(),
+      jobId: job.jobId,
+    };
+
+    console.log('📄 RENDERER: Создан labelItem:', labelItem);
+    
+    this.printLabels.unshift(labelItem); // Добавляем в начало для показа последних сверху
+    
+    console.log('📄 RENDERER: Общее количество этикеток:', this.printLabels.length);
+    
+    // Ограничиваем историю 50 этикетками
+    if (this.printLabels.length > 50) {
+      this.printLabels = this.printLabels.slice(0, 50);
+    }
+
+    this.updateLabelMonitorUI();
+    this.updateLabelCountBadge();
+    
+    console.log('📄 RENDERER: UI обновлен!');
+  }
+
+  private updateLabelStatus(jobId: string, status: 'received' | 'printing' | 'completed' | 'error', errorMessage?: string): void {
+    const labelIndex = this.printLabels.findIndex(label => label.jobId === jobId);
+    if (labelIndex !== -1 && this.printLabels[labelIndex]) {
+      this.printLabels[labelIndex].status = status;
+      if (errorMessage && this.printLabels[labelIndex]) {
+        this.printLabels[labelIndex].errorMessage = errorMessage;
+      }
+      this.updateLabelMonitorUI();
+    }
+  }
+
+  private updateLabelMonitorUI(): void {
+    const monitor = document.getElementById('label-monitor');
+    const noLabelsMessage = document.getElementById('no-labels-message');
+    
+    if (!monitor || !noLabelsMessage) return;
+
+    if (this.printLabels.length === 0) {
+      noLabelsMessage.style.display = 'block';
+      return;
+    }
+
+    noLabelsMessage.style.display = 'none';
+    
+    // Очищаем старые элементы, кроме сообщения "нет этикеток"
+    const existingLabels = monitor.querySelectorAll('.label-item');
+    existingLabels.forEach(item => item.remove());
+
+    // Добавляем новые элементы этикеток
+    this.printLabels.forEach(label => {
+      const labelElement = this.createLabelElement(label);
+      monitor.appendChild(labelElement);
+    });
+
+    // Автоскролл к последней этикетке
+    if (this.autoScroll && this.printLabels.length > 0) {
+      const firstLabel = monitor.querySelector('.label-item');
+      if (firstLabel) {
+        firstLabel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+  }
+
+  private createLabelElement(label: any): HTMLElement {
+    const div = document.createElement('div');
+    div.className = `label-item ${label.status}`;
+    div.id = `label-${label.id}`;
+
+    const statusIcon = this.getLabelStatusIcon(label.status);
+    const statusText = this.getLabelStatusText(label.status);
+    const timeString = label.timestamp.toLocaleTimeString('ru-RU', { 
+      hour: '2-digit', 
+      minute: '2-digit', 
+      second: '2-digit' 
+    });
+
+    // Используем правильные поля из обновленного интерфейса
+    const productName = label.labelData.category || 'Неизвестный продукт';
+    const chefName = label.labelData.preparerName || 'Неизвестный повар';
+    
+    // Форматируем дату срока годности
+    let expiryDateText = 'Не указано';
+    if (label.labelData.expiryDate) {
+      try {
+        const expiryDate = new Date(label.labelData.expiryDate);
+        expiryDateText = expiryDate.toLocaleDateString('ru-RU');
+      } catch (error) {
+        expiryDateText = label.labelData.expiryDate;
+      }
+    }
+
+    div.innerHTML = `
+      <div class="label-header">
+        <div class="label-info">
+          <div class="label-name">${productName}</div>
+          <div class="label-details">
+            <span>👨‍🍳 ${chefName}</span>
+            <span>📅 до ${expiryDateText}</span>
+            ${label.labelData.temperature ? `<span>🌡️ ${label.labelData.temperature}</span>` : ''}
+            ${label.labelData.labelId ? `<span>🏷️ ${label.labelData.labelId}</span>` : ''}
+          </div>
+          <div class="label-job-id">ID: ${label.jobId}</div>
+        </div>
+        <div>
+          <div class="label-status ${label.status}">
+            <span>${statusIcon}</span>
+            <span>${statusText}</span>
+          </div>
+          <div class="label-timestamp">${timeString}</div>
+        </div>
+      </div>
+      ${label.errorMessage ? `<div style="color: #f56565; font-size: 12px; margin-top: 8px;">❌ ${label.errorMessage}</div>` : ''}
+    `;
+
+    return div;
+  }
+
+  private getLabelStatusIcon(status: string): string {
+    switch (status) {
+      case 'received': return '📨';
+      case 'printing': return '🖨️';
+      case 'completed': return '✅';
+      case 'error': return '❌';
+      default: return '❓';
+    }
+  }
+
+  private getLabelStatusText(status: string): string {
+    switch (status) {
+      case 'received': return 'Получено';
+      case 'printing': return 'Печатается';
+      case 'completed': return 'Готово';
+      case 'error': return 'Ошибка';
+      default: return 'Неизвестно';
+    }
+  }
+
+  private updateLabelCountBadge(): void {
+    const badge = document.getElementById('label-count-badge');
+    if (badge) {
+      badge.textContent = this.printLabels.length.toString();
+    }
+  }
+
+  private toggleAutoScroll(): void {
+    this.autoScroll = !this.autoScroll;
+    this.updateAutoScrollButton();
+  }
+
+  private updateAutoScrollButton(): void {
+    const btn = document.getElementById('auto-scroll-btn');
+    const text = document.getElementById('auto-scroll-text');
+    
+    if (btn && text) {
+      if (this.autoScroll) {
+        text.textContent = 'Авто-скролл вкл';
+        btn.className = 'btn btn-primary';
+      } else {
+        text.textContent = 'Авто-скролл выкл';
+        btn.className = 'btn btn-secondary';
+      }
+    }
+  }
+
+  private clearLabelHistory(): void {
+    if (this.printLabels.length === 0) {
+      this.showNotification('История этикеток уже пуста', 'info');
+      return;
+    }
+
+    if (confirm(`Очистить историю из ${this.printLabels.length} этикеток?`)) {
+      this.printLabels = [];
+      this.updateLabelMonitorUI();
+      this.updateLabelCountBadge();
+      this.showNotification('История этикеток очищена', 'success');
+    }
+  }
+
+  private simulatePrinting(jobId: string): void {
+    // Симулируем процесс печати для демонстрации
+    setTimeout(() => {
+      this.updateLabelStatus(jobId, 'printing');
+    }, 500);
+
+    setTimeout(() => {
+      // Симулируем успешную или ошибочную печать
+      const success = Math.random() > 0.1; // 90% успеха
+      if (success) {
+        this.updateLabelStatus(jobId, 'completed');
+      } else {
+        this.updateLabelStatus(jobId, 'error', 'Принтер недоступен');
+      }
+    }, 2000 + Math.random() * 3000); // 2-5 секунд
+  }
+}
+
+// Запуск приложения после загрузки DOM
+document.addEventListener('DOMContentLoaded', () => {
+  new PrintAgentApp();
+});

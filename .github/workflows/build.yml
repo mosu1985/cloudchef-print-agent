@@ -1,0 +1,48 @@
+name: Build/release
+
+# Запуск при push тегов вида v*.*.*
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  release:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+
+    steps:
+    - name: Check out Git repository
+      uses: actions/checkout@v4
+
+    - name: Install Node.js, NPM and Yarn
+      uses: actions/setup-node@v4
+      with:
+        node-version: 18
+        cache: npm
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Build and release Electron app
+      uses: samuelmeuli/action-electron-builder@v1
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        release: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        mac_certs: ${{ secrets.MAC_CERTS }}
+        mac_certs_password: ${{ secrets.MAC_CERTS_PASSWORD }}
+        windows_certs: ${{ secrets.WINDOWS_CERTS }}
+        windows_certs_password: ${{ secrets.WINDOWS_CERTS_PASSWORD }}
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: release-${{ matrix.os }}
+        path: release/

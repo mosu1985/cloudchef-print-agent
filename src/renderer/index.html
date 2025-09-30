@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CloudChef Print Agent</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            overflow: hidden;
+        }
+
+        .app-container {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Заголовок */
+        .app-header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 20px 30px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .app-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .app-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 16px;
+        }
+
+        .app-title h1 {
+            font-size: 20px;
+            font-weight: 600;
+            color: #2d3748;
+        }
+
+        .app-version {
+            background: rgba(102, 126, 234, 0.1);
+            color: #667eea;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .window-controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .control-btn {
+            width: 28px;
+            height: 28px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            transition: all 0.2s;
+            background: rgba(255, 255, 255, 0.8);
+        }
+
+        .control-btn:hover {
+            background: rgba(255, 255, 255, 1);
+            transform: scale(1.05);
+        }
+
+        /* Основное содержимое */
+        .app-content {
+            flex: 1;
+            display: flex;
+            padding: 0;
+        }
+
+        /* Боковая панель */
+        .sidebar {
+            width: 250px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-right: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 0;
+        }
+
+        .nav-tabs {
+            list-style: none;
+            padding: 20px 0;
+        }
+
+        .nav-tab {
+            margin: 0;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 15px 25px;
+            text-decoration: none;
+            color: #4a5568;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+            background: none;
+            width: 100%;
+            text-align: left;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .nav-link:hover {
+            background: rgba(102, 126, 234, 0.1);
+            color: #667eea;
+        }
+
+        .nav-link.active {
+            background: linear-gradient(90deg, rgba(102, 126, 234, 0.15), transparent);
+            color: #667eea;
+            border-right: 3px solid #667eea;
+        }
+
+        .nav-icon {
+            font-size: 16px;
+            width: 20px;
+            text-align: center;
+        }
+
+        /* Основная область */
+        .main-content {
+            flex: 1;
+            padding: 30px;
+            overflow-y: auto;
+        }
+
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Карточки */
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+        }
+
+        .card-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Статус */
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-weight: 500;
+            margin-bottom: 16px;
+        }
+
+        .status-connected {
+            background: rgba(72, 187, 120, 0.1);
+            color: #38a169;
+            border: 1px solid rgba(72, 187, 120, 0.2);
+        }
+
+        .status-server-connected {
+            background: rgba(237, 137, 54, 0.1);
+            color: #ed8936;
+            border: 1px solid rgba(237, 137, 54, 0.2);
+        }
+
+        .status-disconnected {
+            background: rgba(245, 101, 101, 0.1);
+            color: #f56565;
+            border: 1px solid rgba(245, 101, 101, 0.2);
+        }
+
+        .status-error {
+            background: rgba(245, 101, 101, 0.1);
+            color: #f56565;
+            border: 1px solid rgba(245, 101, 101, 0.2);
+        }
+
+        /* Формы */
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 500;
+            color: #4a5568;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.2s;
+            background: rgba(255, 255, 255, 0.8);
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+            background: rgba(255, 255, 255, 1);
+        }
+
+        .form-select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            background: rgba(255, 255, 255, 0.8);
+            cursor: pointer;
+        }
+
+        .form-select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .form-checkbox input {
+            width: 16px;
+            height: 16px;
+            accent-color: #667eea;
+        }
+
+        /* Кнопки */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.8);
+            color: #4a5568;
+            border: 1px solid #e2e8f0;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 1);
+            transform: translateY(-1px);
+        }
+
+        .btn-danger {
+            background: rgba(245, 101, 101, 0.1);
+            color: #f56565;
+            border: 1px solid rgba(245, 101, 101, 0.2);
+        }
+
+        .btn-danger:hover {
+            background: rgba(245, 101, 101, 0.2);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        /* Список */
+        .printer-list {
+            list-style: none;
+            margin-top: 16px;
+        }
+
+        .printer-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            background: rgba(255, 255, 255, 0.5);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .printer-item:hover {
+            background: rgba(255, 255, 255, 0.8);
+            border-color: #667eea;
+        }
+
+        .printer-item.selected {
+            background: rgba(102, 126, 234, 0.1);
+            border-color: #667eea;
+        }
+
+        .printer-info h4 {
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 4px;
+        }
+
+        .printer-info p {
+            font-size: 12px;
+            color: #718096;
+        }
+
+        .printer-status {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .status-ready { color: #38a169; }
+        .status-busy { color: #ed8936; }
+        .status-error { color: #f56565; }
+        .status-offline { color: #a0aec0; }
+
+        /* Уведомления */
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 8px;
+            padding: 16px;
+            border-left: 4px solid #667eea;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            z-index: 1000;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        .notification.error {
+            border-left-color: #f56565;
+        }
+
+        .notification.success {
+            border-left-color: #38a169;
+        }
+
+        .notification.warning {
+            border-left-color: #ed8936;
+        }
+
+        /* Загрузка */
+        .loading {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid #e2e8f0;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Текст справки */
+        .help-text {
+            font-size: 13px;
+            color: #718096;
+            margin-top: 8px;
+        }
+
+        /* Монитор этикеток */
+        .label-monitor-controls {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .label-count-badge {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 4px 8px;
+            border-radius: 12px;
+            margin-left: 8px;
+            min-width: 20px;
+            text-align: center;
+        }
+
+        .label-monitor {
+            max-height: 350px;
+            overflow-y: auto;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 16px;
+        }
+
+        .no-labels-message {
+            text-align: center;
+            color: #718096;
+            padding: 40px 20px;
+        }
+
+        .no-labels-message span {
+            font-size: 32px;
+            display: block;
+            margin-bottom: 12px;
+        }
+
+        .no-labels-message p {
+            margin: 8px 0;
+        }
+
+        .label-item {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 8px;
+            border-left: 4px solid #667eea;
+            animation: slideInFromRight 0.3s ease;
+            transition: all 0.2s;
+        }
+
+        .label-item:hover {
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+            transform: translateY(-1px);
+        }
+
+        .label-item.printing {
+            border-left-color: #ed8936;
+            background: rgba(237, 137, 54, 0.05);
+        }
+
+        .label-item.completed {
+            border-left-color: #38a169;
+            background: rgba(72, 187, 120, 0.05);
+        }
+
+        .label-item.error {
+            border-left-color: #f56565;
+            background: rgba(245, 101, 101, 0.05);
+        }
+
+        .label-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+
+        .label-info {
+            flex: 1;
+        }
+
+        .label-name {
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 4px;
+        }
+
+        .label-details {
+            font-size: 12px;
+            color: #718096;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4px;
+        }
+
+        .label-status {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 12px;
+            white-space: nowrap;
+        }
+
+        .label-status.received {
+            background: rgba(102, 126, 234, 0.1);
+            color: #667eea;
+        }
+
+        .label-status.printing {
+            background: rgba(237, 137, 54, 0.1);
+            color: #ed8936;
+        }
+
+        .label-status.completed {
+            background: rgba(72, 187, 120, 0.1);
+            color: #38a169;
+        }
+
+        .label-status.error {
+            background: rgba(245, 101, 101, 0.1);
+            color: #f56565;
+        }
+
+        .label-timestamp {
+            font-size: 10px;
+            color: #a0aec0;
+            margin-top: 4px;
+            text-align: right;
+        }
+
+        @keyframes slideInFromRight {
+            from { 
+                opacity: 0; 
+                transform: translateX(20px); 
+            }
+            to { 
+                opacity: 1; 
+                transform: translateX(0); 
+            }
+        }
+
+        .label-monitor.auto-scroll {
+            scroll-behavior: smooth;
+        }
+
+        .label-job-id {
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 10px;
+            color: #a0aec0;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-top: 4px;
+            display: inline-block;
+        }
+
+        /* Скролл */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.5);
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Используем системный заголовок окна -->
+
+        <div class="app-content">
+            <!-- Боковая панель -->
+            <nav class="sidebar">
+                <ul class="nav-tabs">
+                    <li class="nav-tab">
+                        <button class="nav-link active" data-tab="connection">
+                            <span class="nav-icon">🔗</span>
+                            Подключение
+                        </button>
+                    </li>
+                    <li class="nav-tab">
+                        <button class="nav-link" data-tab="printer">
+                            <span class="nav-icon">🖨️</span>
+                            Принтер
+                        </button>
+                    </li>
+                    <li class="nav-tab">
+                        <button class="nav-link" data-tab="general">
+                            <span class="nav-icon">⚙️</span>
+                            Общие
+                        </button>
+                    </li>
+                    <li class="nav-tab">
+                        <button class="nav-link" data-tab="updates">
+                            <span class="nav-icon">🔄</span>
+                            Обновления
+                        </button>
+                    </li>
+                    <li class="nav-tab">
+                        <button class="nav-link" data-tab="logs">
+                            <span class="nav-icon">📋</span>
+                            Логи
+                        </button>
+                    </li>
+                </ul>
+            </nav>
+
+            <!-- Основное содержимое -->
+            <main class="main-content">
+                <!-- Подключение -->
+                <div class="tab-content active" id="connection-tab">
+                    <div class="card">
+                        <h2 class="card-title">
+                            <span>📡</span>
+                            Статус подключения
+                        </h2>
+                        <div class="status-indicator status-disconnected" id="connection-status">
+                            <span>🔴</span>
+                            <span>Отключено</span>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h2 class="card-title">
+                            <span>🏪</span>
+                            Настройки ресторана
+                        </h2>
+                        <div class="form-group">
+                            <label class="form-label" for="server-url">URL сервера</label>
+                            <input type="text" id="server-url" class="form-input" 
+                                   value="https://cloudchef-print-server.onrender.com" readonly>
+                            <div class="help-text">Адрес WebSocket сервера CloudChef</div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="restaurant-code">Код ресторана (6 цифр)</label>
+                            <input type="text" id="restaurant-code" class="form-input" 
+                                   placeholder="123456" maxlength="6" pattern="[0-9]{6}">
+                            <div class="help-text">Введите код из вкладки "Агент" в Kitchen Fresh Labels</div>
+                        </div>
+                        <div class="form-group">
+                            <button class="btn btn-primary" id="connect-btn">
+                                <span>🔗</span>
+                                Подключиться
+                            </button>
+                            <button class="btn btn-secondary" id="disconnect-btn" style="margin-left: 8px;">
+                                <span>🚫</span>
+                                Отключиться
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Принтер -->
+                <div class="tab-content" id="printer-tab">
+                    <!-- Активные этикетки -->
+                    <div class="card">
+                        <h2 class="card-title">
+                            <span>📄</span>
+                            Активные этикетки
+                            <span id="label-count-badge" class="label-count-badge">0</span>
+                        </h2>
+                        <div class="label-monitor-controls">
+                            <button class="btn btn-secondary" id="auto-scroll-btn">
+                                <span>📜</span>
+                                <span id="auto-scroll-text">Авто-скролл вкл</span>
+                            </button>
+                            <button class="btn btn-secondary" id="clear-labels-btn">
+                                <span>🗑️</span>
+                                Очистить историю
+                            </button>
+                        </div>
+                        <div class="label-monitor" id="label-monitor">
+                            <div class="no-labels-message" id="no-labels-message">
+                                <span>📭</span>
+                                <p>Ожидание этикеток...</p>
+                                <p class="help-text">Этикетки, присланные с сервера, будут отображаться здесь</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Выбор принтера -->
+                    <div class="card">
+                        <h2 class="card-title">
+                            <span>🖨️</span>
+                            Выбор принтера
+                        </h2>
+                        <button class="btn btn-secondary" id="refresh-printers-btn">
+                            <span>🔄</span>
+                            Обновить список
+                        </button>
+                        <ul class="printer-list" id="printer-list">
+                            <!-- Принтеры будут добавлены динамически -->
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Общие -->
+                <div class="tab-content" id="general-tab">
+                    <div class="card">
+                        <h2 class="card-title">
+                            <span>⚙️</span>
+                            Общие настройки
+                        </h2>
+                        <div class="form-checkbox">
+                            <input type="checkbox" id="auto-launch">
+                            <label for="auto-launch">Запускать при старте системы</label>
+                        </div>
+                        <div class="form-checkbox">
+                            <input type="checkbox" id="minimize-to-tray">
+                            <label for="minimize-to-tray">Сворачивать в системный трей</label>
+                        </div>
+                        <div class="form-checkbox">
+                            <input type="checkbox" id="notifications">
+                            <label for="notifications">Показывать уведомления</label>
+                        </div>
+                        <div class="form-group">
+                            <button class="btn btn-primary" id="save-settings-btn">
+                                <span>💾</span>
+                                Сохранить настройки
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Обновления -->
+                <div class="tab-content" id="updates-tab">
+                    <div class="card">
+                        <h2 class="card-title">
+                            <span>🔄</span>
+                            Автообновления
+                        </h2>
+                        <p>Приложение автоматически проверяет обновления при запуске.</p>
+                        <div class="form-group" style="margin-top: 16px;">
+                            <button class="btn btn-primary" id="check-updates-btn">
+                                <span>🔍</span>
+                                Проверить обновления
+                            </button>
+                        </div>
+                        <div id="update-status" style="margin-top: 16px;"></div>
+                    </div>
+                </div>
+
+                <!-- Логи -->
+                <div class="tab-content" id="logs-tab">
+                    <div class="card">
+                        <h2 class="card-title">
+                            <span>📋</span>
+                            Логи приложения
+                        </h2>
+                        <div class="form-group">
+                            <button class="btn btn-secondary" id="open-logs-btn">
+                                <span>📁</span>
+                                Открыть папку с логами
+                            </button>
+                        </div>
+                        <div class="help-text">
+                            Логи содержат информацию о работе приложения, подключениях и ошибках.
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="renderer.js"></script>
+</body>
+</html>

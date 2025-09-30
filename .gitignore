@@ -1,0 +1,72 @@
+# 📦 Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 🏗️ Build outputs
+dist/
+release/
+build/
+
+# 📱 Electron
+*.app
+*.dmg
+*.deb
+*.rpm
+*.exe
+*.msi
+*.zip
+*.tar.gz
+*.AppImage
+*.snap
+
+# 📄 Logs
+logs/
+*.log
+
+# 💾 OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# 🔧 Editor configs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ⚙️ Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# 🧪 Testing
+coverage/
+.nyc_output/
+
+# 📊 Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# 🔐 Security
+*.pem
+*.key
+!public.key
+
+# 📱 Electron specific
+electron-builder.env
+
+# 🗂️ Temporary files
+tmp/
+temp/

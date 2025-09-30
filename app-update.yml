@@ -1,0 +1,27 @@
+provider: github
+owner: mosu1985
+repo: cloudchef-print-agent
+updaterCacheDirName: cloudchef-print-agent-updater
+
+# 🔐 Настройки безопасности
+publisherName: 
+  - CloudChef Team
+  - mosu1985
+
+# 📦 Каналы обновлений
+channels:
+  - latest
+  - beta
+
+# 🎯 Настройки загрузки  
+requestHeaders:
+  User-Agent: CloudChef-Print-Agent
+
+# ⏰ Интервалы проверки
+checkForUpdatesInterval: 3600000  # 1 час в миллисекундах
+autoDownload: true
+autoInstallOnAppQuit: true
+
+# 📊 Логирование
+logger:
+  level: info
