@@ -62,22 +62,6 @@
         "to": "app-update.yml"
       }
     ],
-    "mac": {
-      "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "universal"
-          ]
-        }
-      ],
-      "icon": "assets/icon.icns",
-      "category": "public.app-category.utilities",
-      "hardenedRuntime": true,
-      "gatekeeperAssess": false,
-      "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.plist"
-    },
     "win": {
       "target": [
         {
@@ -90,18 +74,6 @@
       "icon": "assets/icon.ico",
       "publisherName": "CloudChef Team",
       "verifyUpdateCodeSignature": false
-    },
-    "linux": {
-      "target": [
-        {
-          "target": "AppImage",
-          "arch": [
-            "x64"
-          ]
-        }
-      ],
-      "icon": "assets/icon.png",
-      "category": "Utility"
     },
     "nsis": {
       "oneClick": false,
