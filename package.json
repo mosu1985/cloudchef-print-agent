@@ -71,7 +71,6 @@
           ]
         }
       ],
-      "icon": "assets/icon.png",
       "publisherName": "CloudChef Team",
       "verifyUpdateCodeSignature": false
     },
