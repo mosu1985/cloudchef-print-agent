@@ -71,7 +71,7 @@
           ]
         }
       ],
-      "icon": "assets/icon.ico",
+      "icon": "assets/icon.png",
       "publisherName": "CloudChef Team",
       "verifyUpdateCodeSignature": false
     },
@@ -80,8 +80,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": false,
       "createStartMenuShortcut": true,
-      "shortcutName": "CloudChef Print Agent",
-      "include": "build/installer.nsh"
+      "shortcutName": "CloudChef Print Agent"
     },
     "publish": {
       "provider": "github",
