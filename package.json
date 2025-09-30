@@ -1,6 +1,6 @@
 {
   "name": "cloudchef-print-agent",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "CloudChef Print Agent - Desktop приложение для печати этикеток",
   "main": "dist/main/main.js",
   "author": "CloudChef Team",
@@ -12,13 +12,13 @@
     "build": "tsc && npm run build:renderer",
     "build:watch": "tsc -w",
     "build:renderer": "webpack --mode production",
-    "build:dev": "webpack --mode development", 
+    "build:dev": "webpack --mode development",
     "electron:dev": "wait-on ./dist/main/main.js && electron .",
     "electron:pack": "npm run build && electron-builder",
     "electron:dist": "npm run build && electron-builder --publish=never",
     "electron:publish": "npm run build && electron-builder --publish=always",
     "release:patch": "npm version patch && git push origin --tags",
-    "release:minor": "npm version minor && git push origin --tags", 
+    "release:minor": "npm version minor && git push origin --tags",
     "release:major": "npm version major && git push origin --tags",
     "postinstall": "electron-builder install-app-deps",
     "test:first-run": "node test-first-run.js"
@@ -66,7 +66,9 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["universal"]
+          "arch": [
+            "universal"
+          ]
         }
       ],
       "icon": "assets/icon.icns",
@@ -80,7 +82,9 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "assets/icon.ico",
@@ -91,7 +95,9 @@
       "target": [
         {
           "target": "AppImage",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "assets/icon.png",
