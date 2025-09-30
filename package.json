@@ -1,6 +1,6 @@
 {
   "name": "cloudchef-print-agent",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "CloudChef Print Agent - Desktop приложение для печати этикеток",
   "main": "dist/main/main.js",
   "author": "CloudChef Team",
