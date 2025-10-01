@@ -223,51 +223,10 @@ export class PrinterManager {
     log.info(`Тестовая печать на принтере: ${printerName}`);
     
     try {
-      const testLabel: LabelData = {
-        // Обязательные поля (обновлено под новый интерфейс)
-        id: 'test-' + Date.now(),
-        labelId: 'TEST01',
-        category: 'ТЕСТ ПЕЧАТИ', // Основное поле (было name)
-        temperature: '+4°C',
-        shelfLifeDays: 1,
-        productionDate: new Date().toISOString(),
-        expiryDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-        preparerName: 'CloudChef Agent', // Обновлено: было chef
-        copies: 1,
-        
-        // Дополнительные поля
-        method: 'тестирование',
-        comment: 'Тестовая этикетка для проверки работы принтера',
-        purpose: 'test'
-      };
-
-      return await this.printLabel(printerName, testLabel);
-    } catch (error) {
-      log.error('Ошибка тестовой печати:', error);
-      return {
-        success: false,
-        error: String(error)
-      };
-    }
-  }
-
-  public async printLabel(printerName: string, labelData: LabelData, offsetHorizontal = 0, offsetVertical = 0): Promise<PrintResult> {
-    log.info(`Печать этикетки на принтере "${printerName}":`, labelData);
-    
-    try {
-      let tempFile: string;
-      
-      // Если есть HTML - генерируем PDF из HTML
-      if (labelData.html) {
-        log.info('🎨 Генерация PDF из HTML этикетки...');
-        tempFile = await this.generatePDFFromHTML(labelData.html, offsetHorizontal, offsetVertical);
-      } else {
-        // Если нет HTML - используем текстовую версию (fallback)
-        log.warn('⚠️ HTML не найден, используем текстовую этикетку');
-        const labelContent = this.generateLabelContent(labelData);
-        tempFile = path.join(os.tmpdir(), `cloudchef-label-${Date.now()}.txt`);
-        fs.writeFileSync(tempFile, labelContent, 'utf8');
-      }
+      // Создаем простой текстовый файл для тестирования
+      const testText = 'Hello World Bomond';
+      const tempFile = path.join(os.tmpdir(), `test-print-${Date.now()}.txt`);
+      fs.writeFileSync(tempFile, testText, 'utf8');
       
       // Печатаем в зависимости от платформы
       const platform = process.platform;
@@ -295,10 +254,79 @@ export class PrinterManager {
       }
       
       if (success) {
-        log.info('Этикетка напечатана успешно');
+        log.info('Тестовая печать выполнена успешно');
         return { success: true };
       } else {
-        throw new Error('Печать не удалась');
+        throw new Error('Тестовая печать не удалась');
+      }
+    } catch (error) {
+      log.error('Ошибка тестовой печати:', error);
+      return {
+        success: false,
+        error: String(error)
+      };
+    }
+  }
+
+  public async printLabel(printerName: string, labelData: LabelData, offsetHorizontal = 0, offsetVertical = 0): Promise<PrintResult> {
+    log.info(`Печать этикетки на принтере "${printerName}":`, labelData);
+    
+    try {
+      // Если есть HTML - используем ПРЯМУЮ ПЕЧАТЬ (как в старой версии)
+      if (labelData.html) {
+        log.info('🎨 ПРЯМАЯ ПЕЧАТЬ HTML (без PDF, как в оригинальной версии)');
+        const success = await this.printHTMLDirectly(
+          printerName, 
+          labelData.html, 
+          offsetHorizontal, 
+          offsetVertical,
+          labelData.copies || 1
+        );
+        
+        if (success) {
+          log.info('✅ Этикетка напечатана успешно (прямая печать)');
+          return { success: true };
+        } else {
+          throw new Error('Прямая печать не удалась');
+        }
+      } else {
+        // Если нет HTML - используем текстовую версию (fallback)
+        log.warn('⚠️ HTML не найден, используем текстовую этикетку');
+        const labelContent = this.generateLabelContent(labelData);
+        const tempFile = path.join(os.tmpdir(), `cloudchef-label-${Date.now()}.txt`);
+        fs.writeFileSync(tempFile, labelContent, 'utf8');
+        
+        // Печатаем в зависимости от платформы
+        const platform = process.platform;
+        let success = false;
+        
+        switch (platform) {
+          case 'win32':
+            success = await this.printWindows(printerName, tempFile);
+            break;
+          case 'darwin':
+            success = await this.printMacOS(printerName, tempFile);
+            break;
+          case 'linux':
+            success = await this.printLinux(printerName, tempFile);
+            break;
+          default:
+            throw new Error(`Печать не поддерживается на платформе: ${platform}`);
+        }
+        
+        // Удаляем временный файл
+        try {
+          fs.unlinkSync(tempFile);
+        } catch (cleanupError) {
+          log.warn('Не удалось удалить временный файл:', cleanupError);
+        }
+        
+        if (success) {
+          log.info('Этикетка напечатана успешно (текст)');
+          return { success: true };
+        } else {
+          throw new Error('Печать не удалась');
+        }
       }
       
     } catch (error) {
@@ -310,17 +338,21 @@ export class PrinterManager {
     }
   }
   
-  private async generatePDFFromHTML(html: string, offsetHorizontal: number, offsetVertical: number): Promise<string> {
+  private async printHTMLDirectly(printerName: string, html: string, offsetHorizontal: number, offsetVertical: number, copies: number = 1): Promise<boolean> {
     return new Promise((resolve, reject) => {
-      // Создаем невидимое окно для рендеринга HTML
+      log.info('🖨️ ПРЯМАЯ ПЕЧАТЬ HTML (как в старой версии)');
+      
+      // Создаем невидимое окно для печати
       const printWindow = new BrowserWindow({
         show: false,
-        width: 800,
-        height: 600,
+        frame: false,
+        transparent: true,
+        focusable: false,
+        skipTaskbar: true,
+        useContentSize: true,
         webPreferences: {
-          offscreen: true,
-          nodeIntegration: false,
-          contextIsolation: true
+          backgroundThrottling: false,
+          offscreen: true
         }
       });
       
@@ -330,59 +362,62 @@ export class PrinterManager {
       // Загружаем HTML
       printWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(fullHTML)}`);
       
-      printWindow.webContents.on('did-finish-load', async () => {
-        try {
-          log.info('📄 HTML загружен, генерируем PDF...');
-          
-          // Генерируем PDF с точными размерами этикетки 60x40mm
-          // В Electron размеры указываются в микрометрах (1mm = 1000 микрометров)
-          const pdfData = await printWindow.webContents.printToPDF({
-            pageSize: {
-              width: 60000,  // 60mm
-              height: 40000  // 40mm
-            },
-            margins: {
-              top: 0,
-              bottom: 0,
-              left: 0,
-              right: 0
-            },
-            printBackground: true,
-            landscape: false,
-            preferCSSPageSize: false
-          });
-          
-          // Сохраняем PDF во временный файл
-          const tempFile = path.join(os.tmpdir(), `cloudchef-label-${Date.now()}.pdf`);
-          fs.writeFileSync(tempFile, pdfData);
-          
-          log.info(`✅ PDF этикетка сгенерирована: ${tempFile} (${pdfData.length} байт)`);
-          
-          // Закрываем невидимое окно
-          printWindow.close();
-          
-          resolve(tempFile);
-        } catch (error) {
-          log.error('Ошибка генерации PDF:', error);
-          printWindow.close();
-          reject(error);
-        }
-      });
+      let loadDone = false;
+      const finishLoad = (tag: string) => {
+        if (loadDone) return;
+        loadDone = true;
+        log.info(`✅ HTML готов к печати: ${tag}`);
+        
+        // Печатаем сразу после загрузки
+        setTimeout(() => printNow(), 100);
+      };
       
-      printWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
-        log.error('Ошибка загрузки HTML:', errorDescription);
-        printWindow.close();
-        reject(new Error(errorDescription));
-      });
+      printWindow.webContents.once('did-finish-load', () => finishLoad('did-finish-load'));
+      printWindow.webContents.once('dom-ready', () => finishLoad('dom-ready'));
       
-      // Таймаут на случай зависания
-      setTimeout(() => {
-        if (!printWindow.isDestroyed()) {
-          log.error('Таймаут генерации PDF');
-          printWindow.close();
-          reject(new Error('Таймаут генерации PDF'));
-        }
-      }, 10000);
+      // Fallback timeout для загрузки
+      const loadTimeout = setTimeout(() => finishLoad('timeout-500ms'), 500);
+      
+      const printNow = () => {
+        clearTimeout(loadTimeout);
+        
+        const printOptions = {
+          silent: true,                      // ✅ Без диалогов
+          printBackground: true,              // ✅ Печатает фоны
+          deviceName: printerName,
+          copies: copies,
+          margins: { marginType: 'none' as const },   // ✅ Без отступов
+          dpi: {                             // ✅ КРИТИЧНО для термопринтеров!
+            horizontal: 203,
+            vertical: 203
+          },
+          pageSize: {                        // ✅ Точные размеры в микронах
+            width: 60000,                    // 60mm
+            height: 40000                    // 40mm
+          }
+        };
+        
+        log.info('📋 Опции печати:', JSON.stringify(printOptions));
+        
+        let printDone = false;
+        const printTimeout = setTimeout(() => {
+          if (!printDone) {
+            log.error('⏱️ Таймаут печати (7 секунд)');
+            if (!printWindow.isDestroyed()) printWindow.close();
+            resolve(false);
+          }
+        }, 7000);
+        
+        printWindow.webContents.print(printOptions, (success, failureReason) => {
+          printDone = true;
+          clearTimeout(printTimeout);
+          
+          log.info(`✅ Результат печати: ${success ? 'УСПЕХ' : 'ОШИБКА'} ${failureReason || ''}`);
+          
+          if (!printWindow.isDestroyed()) printWindow.close();
+          resolve(success);
+        });
+      };
     });
   }
   
