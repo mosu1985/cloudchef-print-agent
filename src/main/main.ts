@@ -82,10 +82,31 @@ class CloudChefPrintAgent {
       }
     });
 
+    // 📊 Прогресс загрузки обновления
+    autoUpdater.on('download-progress', (progressObj) => {
+      log.info(`Прогресс загрузки: ${progressObj.percent}%`);
+      if (this.mainWindow) {
+        this.mainWindow.webContents.send('download-progress', {
+          percent: Math.round(progressObj.percent),
+          transferred: progressObj.transferred,
+          total: progressObj.total,
+          bytesPerSecond: progressObj.bytesPerSecond
+        });
+      }
+    });
+
     autoUpdater.on('update-downloaded', () => {
       log.info('Обновление загружено');
       if (this.mainWindow) {
         this.mainWindow.webContents.send('update-downloaded');
+      }
+    });
+    
+    // 🔍 Обновление не найдено
+    autoUpdater.on('update-not-available', () => {
+      log.info('Обновление не найдено - используется последняя версия');
+      if (this.mainWindow) {
+        this.mainWindow.webContents.send('update-not-available');
       }
     });
   }
@@ -451,21 +472,21 @@ class CloudChefPrintAgent {
           store.set('autoLaunch', true);
           log.info('✅ Пользователь включил автозапуск при первом запуске');
           
-          // Показываем уведомление об успехе
+          // Показываем тихое уведомление об успехе (без звука)
           new Notification({
             title: 'CloudChef Print Agent',
             body: '✅ Автозапуск включен! Агент будет запускаться автоматически.',
-            silent: false
+            silent: true
           }).show();
           
         } catch (error) {
           log.error('Ошибка включения автозапуска:', error);
           
-          // Показываем уведомление об ошибке
+          // Показываем тихое уведомление об ошибке (без звука)
           new Notification({
             title: 'CloudChef Print Agent',
             body: '❌ Не удалось включить автозапуск. Можно настроить в настройках.',
-            silent: false
+            silent: true
           }).show();
         }
       } else {
@@ -551,12 +572,13 @@ class CloudChefPrintAgent {
     log.info('🔔 MAIN: Проверка уведомлений...');
     
     if (store.get('notifications')) {
-      log.info('🔔 MAIN: Показываю уведомление...');
-      new Notification({
-        title: 'Новое задание на печать',
-        body: `Продукт: ${job.labelData.category}\\nПовар: ${job.labelData.preparerName}`,
-        silent: false
-      }).show();
+      log.info('🔔 MAIN: Показываю внутреннее уведомление...');
+      // Отключено: Системные уведомления заменены внутренними в UI
+      // new Notification({
+      //   title: 'Новое задание на печать',
+      //   body: `Продукт: ${job.labelData.category}\\nПовар: ${job.labelData.preparerName}`,
+      //   silent: true
+      // }).show();
       log.info('✅ MAIN: Уведомление показано!');
     } else {
       log.info('⚪ MAIN: Уведомления отключены');
@@ -586,19 +608,29 @@ class CloudChefPrintAgent {
     }
     
     try {
-      const result = await this.printerManager.printLabel(selectedPrinter, job.labelData);
+      // Получаем офсеты из настроек
+      const offsetHorizontal = (store.get('labelOffsetHorizontal') as number) || 0;
+      const offsetVertical = (store.get('labelOffsetVertical') as number) || 0;
+      
+      const result = await this.printerManager.printLabel(
+        selectedPrinter, 
+        job.labelData,
+        offsetHorizontal,
+        offsetVertical
+      );
       
       if (result.success) {
         log.info(`Этикетка напечатана успешно: ${job.jobId}`);
         this.socketManager.sendPrintResult(job.jobId, 'success', 'Этикетка напечатана успешно');
         
-        if (store.get('notifications')) {
-          new Notification({
-            title: 'Печать завершена',
-            body: `Этикетка "${job.labelData.category}" напечатана`,
-            silent: true
-          }).show();
-        }
+        // Отключено: Используются только внутренние уведомления в UI
+        // if (store.get('notifications')) {
+        //   new Notification({
+        //     title: 'Печать завершена',
+        //     body: `Этикетка "${job.labelData.category}" напечатана`,
+        //     silent: true
+        //   }).show();
+        // }
       } else {
         throw new Error(result.error || 'Неизвестная ошибка печати');
       }
@@ -606,13 +638,14 @@ class CloudChefPrintAgent {
       log.error('Ошибка печати:', error);
       this.socketManager.sendPrintResult(job.jobId, 'error', String(error));
       
-      if (store.get('notifications')) {
-        new Notification({
-          title: 'Ошибка печати',
-          body: `Не удалось напечатать этикетку: ${error}`,
-          silent: false
-        }).show();
-      }
+      // Отключено: Используются только внутренние уведомления в UI
+      // if (store.get('notifications')) {
+      //   new Notification({
+      //     title: 'Ошибка печати',
+      //     body: `Не удалось напечатать этикетку: ${error}`,
+      //     silent: true
+      //   }).show();
+      // }
     }
   }
 }

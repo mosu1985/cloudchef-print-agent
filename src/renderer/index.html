@@ -855,6 +855,13 @@
                             <span>🔄</span>
                             Автообновления
                         </h2>
+                        <div class="form-group" style="margin-bottom: 16px;">
+                            <label class="form-label">Текущая версия</label>
+                            <div style="background: rgba(102, 126, 234, 0.1); color: #667eea; padding: 12px 16px; border-radius: 8px; font-weight: 600; font-size: 16px;">
+                                <span>📦</span>
+                                <span id="current-version">v1.0.5</span>
+                            </div>
+                        </div>
                         <p>Приложение автоматически проверяет обновления при запуске.</p>
                         <div class="form-group" style="margin-top: 16px;">
                             <button class="btn btn-primary" id="check-updates-btn">
@@ -863,6 +870,17 @@
                             </button>
                         </div>
                         <div id="update-status" style="margin-top: 16px;"></div>
+                        
+                        <!-- Прогресс-бар загрузки обновления -->
+                        <div id="download-progress-container" style="display: none; margin-top: 16px;">
+                            <label class="form-label">Загрузка обновления</label>
+                            <div style="background: rgba(0, 0, 0, 0.05); border-radius: 8px; overflow: hidden; height: 32px; position: relative;">
+                                <div id="download-progress-bar" style="background: linear-gradient(135deg, #667eea, #764ba2); height: 100%; width: 0%; transition: width 0.3s; display: flex; align-items: center; justify-content: center;">
+                                    <span id="download-progress-text" style="color: white; font-weight: 600; font-size: 13px; position: absolute; left: 50%; transform: translateX(-50%);">0%</span>
+                                </div>
+                            </div>
+                            <div id="download-speed" style="font-size: 12px; color: #718096; margin-top: 8px; text-align: center;"></div>
+                        </div>
                     </div>
                 </div>
 

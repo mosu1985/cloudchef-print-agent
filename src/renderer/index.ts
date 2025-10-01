@@ -54,6 +54,12 @@ class PrintAgentApp {
       if (versionElement) {
         versionElement.textContent = `v${version}`;
       }
+      
+      // 📦 Отображаем версию во вкладке "Обновления"
+      const currentVersionElement = document.getElementById('current-version');
+      if (currentVersionElement) {
+        currentVersionElement.textContent = `v${version}`;
+      }
     } catch (error) {
       // Используем alert для ошибок в renderer процессе
       this.showNotification('Ошибка загрузки версии', 'error');
@@ -214,26 +220,61 @@ class PrintAgentApp {
 
     // Обновления приложения
     window.electronAPI.onUpdateAvailable(() => {
-      this.showNotification('Доступно обновление приложения', 'info');
+      this.showNotification('Найдено обновление! Начинается загрузка...', 'info');
       const updateStatus = document.getElementById('update-status');
       if (updateStatus) {
         updateStatus.innerHTML = `
           <div class="status-indicator" style="background: rgba(54, 162, 235, 0.1); color: #3498db; border-color: rgba(54, 162, 235, 0.2);">
-            <span>📥</span>
-            <span>Загружается обновление...</span>
+            <span>🔍</span>
+            <span>Найдено обновление. Начинается загрузка...</span>
           </div>
         `;
+      }
+      
+      // Показываем прогресс-бар
+      const progressContainer = document.getElementById('download-progress-container');
+      if (progressContainer) {
+        progressContainer.style.display = 'block';
+      }
+    });
+
+    // 📊 Прогресс загрузки обновления
+    window.electronAPI.onDownloadProgress((progress) => {
+      const progressBar = document.getElementById('download-progress-bar');
+      const progressText = document.getElementById('download-progress-text');
+      const speedText = document.getElementById('download-speed');
+      
+      if (progressBar) {
+        progressBar.style.width = `${progress.percent}%`;
+      }
+      
+      if (progressText) {
+        progressText.textContent = `${progress.percent}%`;
+      }
+      
+      if (speedText) {
+        const speedMB = (progress.bytesPerSecond / 1024 / 1024).toFixed(2);
+        const transferredMB = (progress.transferred / 1024 / 1024).toFixed(2);
+        const totalMB = (progress.total / 1024 / 1024).toFixed(2);
+        speedText.textContent = `${transferredMB} МБ из ${totalMB} МБ (${speedMB} МБ/с)`;
       }
     });
 
     window.electronAPI.onUpdateDownloaded(() => {
-      this.showNotification('Обновление загружено. Перезапустите приложение.', 'success');
+      this.showNotification('Обновление загружено! Перезапустите приложение для установки.', 'success');
+      
+      // Скрываем прогресс-бар
+      const progressContainer = document.getElementById('download-progress-container');
+      if (progressContainer) {
+        progressContainer.style.display = 'none';
+      }
+      
       const updateStatus = document.getElementById('update-status');
       if (updateStatus) {
         updateStatus.innerHTML = `
           <div class="status-indicator status-connected">
             <span>✅</span>
-            <span>Обновление готово к установке</span>
+            <span>Обновление загружено и готово к установке</span>
           </div>
           <button class="btn btn-primary" id="restart-and-update-btn" style="margin-top: 12px;">
             <span>🔄</span>
@@ -247,6 +288,19 @@ class PrintAgentApp {
             window.electronAPI.restartAndUpdate();
           });
         }
+      }
+    });
+    
+    // 🔍 Обновление не найдено
+    window.electronAPI.onUpdateNotAvailable(() => {
+      const updateStatus = document.getElementById('update-status');
+      if (updateStatus) {
+        updateStatus.innerHTML = `
+          <div class="status-indicator status-connected">
+            <span>✅</span>
+            <span>Вы используете последнюю версию</span>
+          </div>
+        `;
       }
     });
   }
@@ -526,26 +580,34 @@ class PrintAgentApp {
     
     if (!checkBtn) return;
 
-    checkBtn.innerHTML = '<span class="spinner"></span> Проверка...';
+    checkBtn.innerHTML = '<span class="spinner"></span> Проверка обновлений...';
     checkBtn.disabled = true;
+
+    // Очищаем предыдущий статус
+    const updateStatus = document.getElementById('update-status');
+    if (updateStatus) {
+      updateStatus.innerHTML = `
+        <div class="status-indicator" style="background: rgba(102, 126, 234, 0.1); color: #667eea; border-color: rgba(102, 126, 234, 0.2);">
+          <span>🔍</span>
+          <span>Проверка доступных обновлений...</span>
+        </div>
+      `;
+    }
 
     try {
       await window.electronAPI.checkForUpdates();
-      
-      setTimeout(() => {
-        const updateStatus = document.getElementById('update-status');
-        if (updateStatus) {
-          updateStatus.innerHTML = `
-            <div class="status-indicator status-connected">
-              <span>✅</span>
-              <span>Проверка завершена. Вы используете последнюю версию.</span>
-            </div>
-          `;
-        }
-      }, 2000);
-      
+      // Не показываем преждевременное сообщение "последняя версия"
+      // Ждём события update-available или update-not-available от autoUpdater
     } catch (error) {
       this.showNotification(`Ошибка проверки обновлений: ${error}`, 'error');
+      if (updateStatus) {
+        updateStatus.innerHTML = `
+          <div class="status-indicator status-error">
+            <span>❌</span>
+            <span>Ошибка проверки обновлений</span>
+          </div>
+        `;
+      }
     } finally {
       checkBtn.innerHTML = '<span>🔍</span> Проверить обновления';
       checkBtn.disabled = false;

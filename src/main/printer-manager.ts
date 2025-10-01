@@ -3,6 +3,7 @@ import * as log from 'electron-log';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { BrowserWindow } from 'electron';
 import { LabelData, PrinterInfo, PrintResult } from '../shared/types';
 
 export class PrinterManager {
@@ -250,16 +251,23 @@ export class PrinterManager {
     }
   }
 
-  public async printLabel(printerName: string, labelData: LabelData): Promise<PrintResult> {
+  public async printLabel(printerName: string, labelData: LabelData, offsetHorizontal = 0, offsetVertical = 0): Promise<PrintResult> {
     log.info(`Печать этикетки на принтере "${printerName}":`, labelData);
     
     try {
-      // Генерируем содержимое этикетки
-      const labelContent = this.generateLabelContent(labelData);
+      let tempFile: string;
       
-      // Создаем временный файл
-      const tempFile = path.join(os.tmpdir(), `cloudchef-label-${Date.now()}.txt`);
-      fs.writeFileSync(tempFile, labelContent, 'utf8');
+      // Если есть HTML - генерируем PDF из HTML
+      if (labelData.html) {
+        log.info('🎨 Генерация PDF из HTML этикетки...');
+        tempFile = await this.generatePDFFromHTML(labelData.html, offsetHorizontal, offsetVertical);
+      } else {
+        // Если нет HTML - используем текстовую версию (fallback)
+        log.warn('⚠️ HTML не найден, используем текстовую этикетку');
+        const labelContent = this.generateLabelContent(labelData);
+        tempFile = path.join(os.tmpdir(), `cloudchef-label-${Date.now()}.txt`);
+        fs.writeFileSync(tempFile, labelContent, 'utf8');
+      }
       
       // Печатаем в зависимости от платформы
       const platform = process.platform;
@@ -300,6 +308,122 @@ export class PrinterManager {
         error: String(error)
       };
     }
+  }
+  
+  private async generatePDFFromHTML(html: string, offsetHorizontal: number, offsetVertical: number): Promise<string> {
+    return new Promise((resolve, reject) => {
+      // Создаем невидимое окно для рендеринга HTML
+      const printWindow = new BrowserWindow({
+        show: false,
+        width: 800,
+        height: 600,
+        webPreferences: {
+          offscreen: true,
+          nodeIntegration: false,
+          contextIsolation: true
+        }
+      });
+      
+      // Применяем офсеты к HTML и оборачиваем в полный HTML документ
+      const fullHTML = this.wrapHTMLWithStyles(html, offsetHorizontal, offsetVertical);
+      
+      // Загружаем HTML
+      printWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(fullHTML)}`);
+      
+      printWindow.webContents.on('did-finish-load', async () => {
+        try {
+          log.info('📄 HTML загружен, генерируем PDF...');
+          
+          // Генерируем PDF с точными размерами этикетки 60x40mm
+          // В Electron размеры указываются в микрометрах (1mm = 1000 микрометров)
+          const pdfData = await printWindow.webContents.printToPDF({
+            pageSize: {
+              width: 60000,  // 60mm
+              height: 40000  // 40mm
+            },
+            margins: {
+              top: 0,
+              bottom: 0,
+              left: 0,
+              right: 0
+            },
+            printBackground: true,
+            landscape: false,
+            preferCSSPageSize: false
+          });
+          
+          // Сохраняем PDF во временный файл
+          const tempFile = path.join(os.tmpdir(), `cloudchef-label-${Date.now()}.pdf`);
+          fs.writeFileSync(tempFile, pdfData);
+          
+          log.info(`✅ PDF этикетка сгенерирована: ${tempFile} (${pdfData.length} байт)`);
+          
+          // Закрываем невидимое окно
+          printWindow.close();
+          
+          resolve(tempFile);
+        } catch (error) {
+          log.error('Ошибка генерации PDF:', error);
+          printWindow.close();
+          reject(error);
+        }
+      });
+      
+      printWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+        log.error('Ошибка загрузки HTML:', errorDescription);
+        printWindow.close();
+        reject(new Error(errorDescription));
+      });
+      
+      // Таймаут на случай зависания
+      setTimeout(() => {
+        if (!printWindow.isDestroyed()) {
+          log.error('Таймаут генерации PDF');
+          printWindow.close();
+          reject(new Error('Таймаут генерации PDF'));
+        }
+      }, 10000);
+    });
+  }
+  
+  private wrapHTMLWithStyles(html: string, horizontal: number, vertical: number): string {
+    // Создаем полноценный HTML документ с правильными размерами и офсетами
+    const offsetTransform = (horizontal !== 0 || vertical !== 0) 
+      ? `transform: translate(${horizontal}mm, ${vertical}mm);` 
+      : '';
+    
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <style>
+          * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+          }
+          @page {
+            size: 60mm 40mm;
+            margin: 0;
+          }
+          html, body {
+            width: 60mm;
+            height: 40mm;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+          }
+          body {
+            ${offsetTransform}
+          }
+        </style>
+      </head>
+      <body>
+        ${html}
+      </body>
+      </html>
+    `;
   }
 
   private generateLabelContent(labelData: LabelData): string {
@@ -345,22 +469,36 @@ export class PrinterManager {
 
   private async printWindows(printerName: string, filePath: string): Promise<boolean> {
     return new Promise((resolve) => {
-      // ПРЯМАЯ ПЕЧАТЬ без диалогов через PowerShell Out-Printer
       // Экранируем имя принтера и путь для PowerShell
       const escapedPrinter = printerName.replace(/"/g, '`"');
-      const escapedPath = filePath.replace(/"/g, '`"');
+      const escapedPath = filePath.replace(/"/g, '`"').replace(/\\/g, '\\\\');
       
-      const command = `powershell -Command "Get-Content '${escapedPath}' | Out-Printer -Name '${escapedPrinter}'"`;
+      // Определяем тип файла
+      const isPDF = filePath.toLowerCase().endsWith('.pdf');
       
-      log.info(`Отправка на печать (Windows): ${printerName}`);
+      let command: string;
       
-      exec(command, (error, stdout, stderr) => {
+      if (isPDF) {
+        // Для PDF используем SumatraPDF или Adobe Reader для печати
+        // Альтернатива: использовать встроенную печать PDF через shell
+        command = `powershell -Command "Start-Process -FilePath '${escapedPath}' -ArgumentList '/t','${escapedPrinter}' -Verb Print -WindowStyle Hidden -Wait"`;
+        
+        log.info(`Отправка PDF на печать (Windows): ${printerName}`);
+      } else {
+        // Для текстовых файлов используем Out-Printer
+        command = `powershell -Command "Get-Content '${escapedPath}' | Out-Printer -Name '${escapedPrinter}'"`;
+        
+        log.info(`Отправка текста на печать (Windows): ${printerName}`);
+      }
+      
+      exec(command, { timeout: 30000 }, (error, stdout, stderr) => {
         if (error) {
-          log.error('Ошибка прямой печати Windows:', error);
+          log.error('Ошибка печати Windows:', error);
           log.error('stderr:', stderr);
           resolve(false);
         } else {
           log.info('✅ Успешно отправлено на печать Windows');
+          if (stdout) log.info('stdout:', stdout);
           resolve(true);
         }
       });

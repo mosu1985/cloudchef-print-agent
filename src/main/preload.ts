@@ -54,11 +54,25 @@ const electronAPI = {
     return () => ipcRenderer.removeListener('update-available', handler);
   },
   
+  onDownloadProgress: (callback: (progress: { percent: number; transferred: number; total: number; bytesPerSecond: number }) => void) => {
+    const handler = (_: any, progress: any) => callback(progress);
+    ipcRenderer.on('download-progress', handler);
+    
+    return () => ipcRenderer.removeListener('download-progress', handler);
+  },
+  
   onUpdateDownloaded: (callback: () => void) => {
     const handler = () => callback();
     ipcRenderer.on('update-downloaded', handler);
     
     return () => ipcRenderer.removeListener('update-downloaded', handler);
+  },
+  
+  onUpdateNotAvailable: (callback: () => void) => {
+    const handler = () => callback();
+    ipcRenderer.on('update-not-available', handler);
+    
+    return () => ipcRenderer.removeListener('update-not-available', handler);
   }
 };
 
