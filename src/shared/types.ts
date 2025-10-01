@@ -61,6 +61,10 @@ export interface AppSettings {
   // Принтер
   selectedPrinter: string;
   
+  // 🖨️ Настройки печати (смещение)
+  labelOffsetHorizontal: number; // Горизонтальное смещение в мм (+ вправо, - влево)
+  labelOffsetVertical: number;   // Вертикальное смещение в мм (+ вверх, - вниз)
+  
   // Поведение приложения
   autoLaunch: boolean;
   minimizeToTray: boolean;

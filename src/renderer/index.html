@@ -156,7 +156,8 @@
         .main-content {
             flex: 1;
             padding: 30px;
-            overflow-y: auto;
+            overflow-y: scroll; /* Всегда показывать скролл */
+            max-height: calc(100vh - 60px); /* Ограничить высоту для скролла */
         }
 
         .tab-content {
@@ -694,12 +695,6 @@
                             Настройки ресторана
                         </h2>
                         <div class="form-group">
-                            <label class="form-label" for="server-url">URL сервера</label>
-                            <input type="text" id="server-url" class="form-input" 
-                                   value="https://cloudchef-print-server.onrender.com" readonly>
-                            <div class="help-text">Адрес WebSocket сервера CloudChef</div>
-                        </div>
-                        <div class="form-group">
                             <label class="form-label" for="restaurant-code">Код ресторана (6 цифр)</label>
                             <input type="text" id="restaurant-code" class="form-input" 
                                    placeholder="123456" maxlength="6" pattern="[0-9]{6}">
@@ -781,6 +776,69 @@
                             <input type="checkbox" id="notifications">
                             <label for="notifications">Показывать уведомления</label>
                         </div>
+                    </div>
+
+                    <div class="card">
+                        <h2 class="card-title">
+                            <span>🖨️</span>
+                            Настройки печати этикеток
+                        </h2>
+                        <div class="help-text" style="margin-bottom: 16px;">
+                            Точная настройка положения этикетки на принтере
+                        </div>
+                        
+                        <!-- Горизонтальное смещение -->
+                        <div class="form-group">
+                            <label class="form-label">
+                                ↔️ Горизонтальное смещение (мм)
+                                <span class="help-text" id="horizontal-offset-hint" style="display: inline; margin-left: 8px; font-weight: normal;">
+                                    (центр)
+                                </span>
+                            </label>
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <button class="btn btn-secondary" id="horizontal-decrease-btn" style="width: 40px; padding: 0; font-size: 18px;">
+                                    ←
+                                </button>
+                                <input 
+                                    type="text" 
+                                    id="horizontal-offset-input" 
+                                    class="form-input" 
+                                    style="width: 100px; text-align: center; font-weight: 600;" 
+                                    readonly
+                                    value="0.0"
+                                />
+                                <button class="btn btn-secondary" id="horizontal-increase-btn" style="width: 40px; padding: 0; font-size: 18px;">
+                                    →
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Вертикальное смещение -->
+                        <div class="form-group">
+                            <label class="form-label">
+                                ↕️ Вертикальное смещение (мм)
+                                <span class="help-text" id="vertical-offset-hint" style="display: inline; margin-left: 8px; font-weight: normal;">
+                                    (центр)
+                                </span>
+                            </label>
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <button class="btn btn-secondary" id="vertical-decrease-btn" style="width: 40px; padding: 0; font-size: 18px;">
+                                    ↓
+                                </button>
+                                <input 
+                                    type="text" 
+                                    id="vertical-offset-input" 
+                                    class="form-input" 
+                                    style="width: 100px; text-align: center; font-weight: 600;" 
+                                    readonly
+                                    value="0.0"
+                                />
+                                <button class="btn btn-secondary" id="vertical-increase-btn" style="width: 40px; padding: 0; font-size: 18px;">
+                                    ↑
+                                </button>
+                            </div>
+                        </div>
+
                         <div class="form-group">
                             <button class="btn btn-primary" id="save-settings-btn">
                                 <span>💾</span>

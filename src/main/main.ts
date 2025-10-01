@@ -1,6 +1,7 @@
 import { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, Notification, shell, dialog } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import * as path from 'path';
+import * as fs from 'fs';
 import * as log from 'electron-log';
 import Store from 'electron-store';
 import AutoLaunch from 'auto-launch';
@@ -18,6 +19,8 @@ const store = new Store<AppSettings>({
     serverUrl: 'https://cloudchef-print-server.onrender.com',
     restaurantCode: '',
     selectedPrinter: '',
+    labelOffsetHorizontal: 0, // 🖨️ Горизонтальное смещение в мм
+    labelOffsetVertical: 0,    // 🖨️ Вертикальное смещение в мм
     autoLaunch: false,
     notifications: true,
     minimizeToTray: true,
@@ -131,15 +134,14 @@ class CloudChefPrintAgent {
     });
 
     ipcMain.handle('save-settings', (_, settings: Partial<AppSettings>) => {
-      Object.keys(settings).forEach(key => {
-        store.set(key as keyof AppSettings, (settings as any)[key]);
+      // Удаляем serverUrl из настроек - он теперь захардкожен
+      const { serverUrl, ...settingsToSave } = settings;
+      
+      Object.keys(settingsToSave).forEach(key => {
+        store.set(key as keyof AppSettings, (settingsToSave as any)[key]);
       });
       
       // Применяем изменения
-      if (settings.serverUrl) {
-        this.socketManager.updateServerUrl(settings.serverUrl);
-      }
-      
       if (settings.restaurantCode) {
         this.socketManager.setRestaurantCode(settings.restaurantCode);
       }
@@ -211,13 +213,34 @@ class CloudChefPrintAgent {
   }
 
   private createTray(): void {
-    // ПРАВИЛЬНАЯ БЕЛАЯ Template иконка для macOS
-    const trayIcon = nativeImage.createFromDataURL(
-      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAAdgAAAHYBTnsmCAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAGcSURBVDiNpZM9SwNBEIafJIqgo6OFhYWFhYW2traFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYX/7////7+/v8AAAAASUVORK5CYII='
-    );
+    // Используем иконку из файла для лучшей совместимости с Windows
+    const iconPath = process.platform === 'win32' 
+      ? path.join(__dirname, '../../assets/tray-icon.ico')  // Windows: .ico
+      : path.join(__dirname, '../../assets/tray-icon.png'); // Mac/Linux: .png
     
-    // КРИТИЧЕСКИ ВАЖНО: Template режим для автоадаптации к теме
-    trayIcon.setTemplateImage(true);
+    let trayIcon: Electron.NativeImage;
+    
+    try {
+      if (fs.existsSync(iconPath)) {
+        trayIcon = nativeImage.createFromPath(iconPath);
+        log.info(`✅ Иконка трея загружена из: ${iconPath}`);
+      } else {
+        // Fallback: простая белая точка для template mode
+        log.warn(`⚠️ Файл иконки не найден: ${iconPath}, использую fallback`);
+        trayIcon = nativeImage.createEmpty();
+        trayIcon = nativeImage.createFromDataURL(
+          'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAAdgAAAHYBTnsmCAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAB1SURBVDiNY/z//z8DJYCJgUIwqmFUw6gGdA0MZIDXgGzEBqgCRg0PMNAP////H4/m////M0DYIDYIg/gM////ZwTxQXwYBtFgNogN4jPAwMAAYoP4IDaIzcBAAw1gMoiPT8NoBaNgFIyCUTAKRsEooD4AABm1Ky6D/o8vAAAAAElFTkSuQmCC'
+        );
+      }
+    } catch (error) {
+      log.error('Ошибка загрузки иконки трея:', error);
+      trayIcon = nativeImage.createEmpty();
+    }
+    
+    // ВАЖНО: Template режим только для macOS (для автоадаптации к теме)
+    if (process.platform === 'darwin') {
+      trayIcon.setTemplateImage(true);
+    }
     
     this.tray = new Tray(trayIcon);
     

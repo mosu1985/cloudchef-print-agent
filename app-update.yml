@@ -25,3 +25,6 @@ autoInstallOnAppQuit: true
 # 📊 Логирование
 logger:
   level: info
+
+
+

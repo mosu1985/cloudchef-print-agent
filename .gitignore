@@ -70,3 +70,6 @@ electron-builder.env
 # 🗂️ Temporary files
 tmp/
 temp/
+
+
+

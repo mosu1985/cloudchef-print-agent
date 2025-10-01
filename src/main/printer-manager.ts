@@ -345,14 +345,22 @@ export class PrinterManager {
 
   private async printWindows(printerName: string, filePath: string): Promise<boolean> {
     return new Promise((resolve) => {
-      // Используем notepad /p для печати текстового файла
-      const command = `notepad /p "${filePath}"`;
+      // ПРЯМАЯ ПЕЧАТЬ без диалогов через PowerShell Out-Printer
+      // Экранируем имя принтера и путь для PowerShell
+      const escapedPrinter = printerName.replace(/"/g, '`"');
+      const escapedPath = filePath.replace(/"/g, '`"');
       
-      exec(command, (error) => {
+      const command = `powershell -Command "Get-Content '${escapedPath}' | Out-Printer -Name '${escapedPrinter}'"`;
+      
+      log.info(`Отправка на печать (Windows): ${printerName}`);
+      
+      exec(command, (error, stdout, stderr) => {
         if (error) {
-          log.error('Ошибка печати Windows:', error);
+          log.error('Ошибка прямой печати Windows:', error);
+          log.error('stderr:', stderr);
           resolve(false);
         } else {
+          log.info('✅ Успешно отправлено на печать Windows');
           resolve(true);
         }
       });

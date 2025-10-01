@@ -6,3 +6,6 @@
     trayIcon.setTemplateImage(true); // ВАЖНО: Template режим для правильной видимости на macOS
     
     this.tray = new Tray(trayIcon);
+
+
+

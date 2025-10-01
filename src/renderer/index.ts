@@ -15,6 +15,10 @@ class PrintAgentApp {
     errorMessage?: string;
   }> = [];
   private autoScroll: boolean = true;
+  
+  // 🖨️ Настройки сдвига печати
+  private horizontalOffset: number = 0; // + вправо, - влево (в мм)
+  private verticalOffset: number = 0;   // + вверх, - вниз (в мм)
 
   constructor() {
     this.init();
@@ -161,6 +165,27 @@ class PrintAgentApp {
     if (clearLabelsBtn) {
       clearLabelsBtn.addEventListener('click', () => this.clearLabelHistory());
     }
+    
+    // 🖨️ Кнопки настройки сдвига
+    const horizontalDecreaseBtn = document.getElementById('horizontal-decrease-btn');
+    if (horizontalDecreaseBtn) {
+      horizontalDecreaseBtn.addEventListener('click', () => this.adjustOffset('horizontal', -0.2));
+    }
+    
+    const horizontalIncreaseBtn = document.getElementById('horizontal-increase-btn');
+    if (horizontalIncreaseBtn) {
+      horizontalIncreaseBtn.addEventListener('click', () => this.adjustOffset('horizontal', 0.2));
+    }
+    
+    const verticalDecreaseBtn = document.getElementById('vertical-decrease-btn');
+    if (verticalDecreaseBtn) {
+      verticalDecreaseBtn.addEventListener('click', () => this.adjustOffset('vertical', -0.2));
+    }
+    
+    const verticalIncreaseBtn = document.getElementById('vertical-increase-btn');
+    if (verticalIncreaseBtn) {
+      verticalIncreaseBtn.addEventListener('click', () => this.adjustOffset('vertical', 0.2));
+    }
   }
 
   private setupMainProcessListeners(): void {
@@ -249,12 +274,6 @@ class PrintAgentApp {
   private updateSettingsUI(): void {
     if (!this.settings) return;
 
-    // URL сервера
-    const serverUrlInput = document.getElementById('server-url') as HTMLInputElement;
-    if (serverUrlInput) {
-      serverUrlInput.value = this.settings.serverUrl;
-    }
-
     // Код ресторана
     const restaurantCodeInput = document.getElementById('restaurant-code') as HTMLInputElement;
     if (restaurantCodeInput) {
@@ -279,6 +298,11 @@ class PrintAgentApp {
 
     // Выбранный принтер
     this.selectedPrinter = this.settings.selectedPrinter;
+    
+    // 🖨️ Настройки сдвига
+    this.horizontalOffset = this.settings.labelOffsetHorizontal || 0;
+    this.verticalOffset = this.settings.labelOffsetVertical || 0;
+    this.updateOffsetInputs();
   }
 
   private updateConnectionStatusUI(): void {
@@ -478,7 +502,9 @@ class PrintAgentApp {
       autoLaunch,
       minimizeToTray,
       notifications,
-      selectedPrinter: this.selectedPrinter
+      selectedPrinter: this.selectedPrinter,
+      labelOffsetHorizontal: this.horizontalOffset, // 🖨️ Сохраняем сдвиг
+      labelOffsetVertical: this.verticalOffset      // 🖨️ Сохраняем сдвиг
     };
 
     saveBtn.innerHTML = '<span class="spinner"></span> Сохранение...';
@@ -800,6 +826,52 @@ class PrintAgentApp {
         this.updateLabelStatus(jobId, 'error', 'Принтер недоступен');
       }
     }, 2000 + Math.random() * 3000); // 2-5 секунд
+  }
+  
+  // 🖨️ Методы настройки сдвига печати
+  private adjustOffset(type: 'horizontal' | 'vertical', delta: number): void {
+    if (type === 'horizontal') {
+      this.horizontalOffset = Math.round((this.horizontalOffset + delta) * 10) / 10;
+    } else {
+      this.verticalOffset = Math.round((this.verticalOffset + delta) * 10) / 10;
+    }
+    this.updateOffsetInputs();
+  }
+  
+  private updateOffsetInputs(): void {
+    // Обновляем input значения
+    const horizontalInput = document.getElementById('horizontal-offset-input') as HTMLInputElement;
+    if (horizontalInput) {
+      horizontalInput.value = this.horizontalOffset.toFixed(1);
+    }
+    
+    const verticalInput = document.getElementById('vertical-offset-input') as HTMLInputElement;
+    if (verticalInput) {
+      verticalInput.value = this.verticalOffset.toFixed(1);
+    }
+    
+    // Обновляем подсказки (hints)
+    const horizontalHint = document.getElementById('horizontal-offset-hint');
+    if (horizontalHint) {
+      if (this.horizontalOffset > 0) {
+        horizontalHint.textContent = '(вправо)';
+      } else if (this.horizontalOffset < 0) {
+        horizontalHint.textContent = '(влево)';
+      } else {
+        horizontalHint.textContent = '(центр)';
+      }
+    }
+    
+    const verticalHint = document.getElementById('vertical-offset-hint');
+    if (verticalHint) {
+      if (this.verticalOffset > 0) {
+        verticalHint.textContent = '(вверх)';
+      } else if (this.verticalOffset < 0) {
+        verticalHint.textContent = '(вниз)';
+      } else {
+        verticalHint.textContent = '(центр)';
+      }
+    }
   }
 }
 

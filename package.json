@@ -24,9 +24,15 @@
     "test:first-run": "node test-first-run.js"
   },
   "dependencies": {
+    "@radix-ui/react-dialog": "^1.1.15",
+    "@radix-ui/react-dropdown-menu": "^2.1.16",
+    "@radix-ui/react-label": "^2.1.7",
+    "@radix-ui/react-separator": "^1.1.7",
     "auto-launch": "^5.0.6",
     "electron-log": "^5.0.3",
     "electron-store": "^8.2.0",
+    "electron-updater": "^6.1.7",
+    "pdf-to-printer": "^5.6.1",
     "socket.io-client": "^4.7.5"
   },
   "devDependencies": {
@@ -36,7 +42,6 @@
     "css-loader": "^6.8.1",
     "electron": "^28.1.0",
     "electron-builder": "^24.9.1",
-    "electron-updater": "^6.1.7",
     "html-webpack-plugin": "^5.6.0",
     "style-loader": "^3.3.3",
     "ts-loader": "^9.5.1",
@@ -60,6 +65,10 @@
       {
         "from": "app-update.yml",
         "to": "app-update.yml"
+      },
+      {
+        "from": "assets",
+        "to": "assets"
       }
     ],
     "win": {

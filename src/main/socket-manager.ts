@@ -10,6 +10,7 @@ export class SocketManager {
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private heartbeatInterval: NodeJS.Timeout | null = null;
+  private isRegistered: boolean = false;
 
   constructor(serverUrl: string, onConnectionChange: (status: ConnectionStatus) => void) {
     this.serverUrl = serverUrl;
@@ -71,7 +72,9 @@ export class SocketManager {
         this.reconnectAttempts = 0;
         this.onConnectionChange('server-connected');
         
-        if (this.restaurantCode) {
+        // Регистрация происходит только при первом подключении
+        // При переподключении используется событие 'reconnect'
+        if (this.restaurantCode && !this.isRegistered) {
           this.registerAsAgent();
         }
         
@@ -92,9 +95,9 @@ export class SocketManager {
         log.info(`Переподключение выполнено (попытка ${attemptNumber})`);
         this.onConnectionChange('server-connected');
         
-        if (this.restaurantCode) {
-          this.registerAsAgent();
-        }
+        // Регистрация уже произошла в событии 'connect'
+        // Здесь дополнительная регистрация не нужна
+        log.info('Переподключение завершено, регистрация уже выполнена');
       });
 
       this.socket.on('reconnect_attempt', (attemptNumber) => {
@@ -116,6 +119,7 @@ export class SocketManager {
         log.info('Отключен от сервера:', reason);
         this.onConnectionChange('disconnected');
         this.stopHeartbeat();
+        this.isRegistered = false; // Сбрасываем флаг при отключении
         
         if (reason === 'io server disconnect') {
           // Сервер принудительно отключил - переподключаемся
@@ -165,6 +169,12 @@ export class SocketManager {
       return;
     }
 
+    // Предотвращаем повторную регистрацию
+    if (this.isRegistered) {
+      log.info('✅ Агент уже зарегистрирован, пропускаем повторную регистрацию');
+      return;
+    }
+
     log.info(`🔗 Регистрация агента с кодом: ${this.restaurantCode}`);
     
     const printerInfo = {
@@ -180,6 +190,7 @@ export class SocketManager {
     
     log.info('🚀 Отправка данных регистрации агента:', registrationData);
     this.socket.emit('register_agent', registrationData);
+    this.isRegistered = true;
   }
 
   private startHeartbeat(): void {
@@ -222,8 +233,11 @@ export class SocketManager {
   public checkConnection(): void {
     if (this.socket?.connected) {
       log.info('Подключение активно');
-      if (this.restaurantCode) {
+      if (this.restaurantCode && !this.isRegistered) {
+        log.info('Агент не зарегистрирован, выполняем регистрацию');
         this.registerAsAgent();
+      } else if (this.isRegistered) {
+        log.info('Агент уже зарегистрирован, пропускаем повторную регистрацию');
       }
     } else {
       log.info('Подключение отсутствует, попытка подключения...');
