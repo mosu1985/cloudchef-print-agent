@@ -435,21 +435,8 @@ class PrintAgentApp {
             <span>${statusIcon}</span>
             <span>${this.getStatusText(printer.status)}</span>
           </div>
-          <button class="btn btn-secondary" data-printer="${printer.name}" style="margin-top: 8px; font-size: 12px; padding: 6px 12px;">
-            <span>🧪</span>
-            Тест
-          </button>
         </div>
       `;
-
-      // Обработчик кнопки тестирования
-      const testBtn = li.querySelector(`[data-printer="${printer.name}"]`);
-      if (testBtn) {
-        testBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          this.testPrinter(printer.name);
-        });
-      }
 
       printerList.appendChild(li);
     });

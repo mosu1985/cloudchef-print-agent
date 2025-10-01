@@ -68,6 +68,7 @@ export interface AppSettings {
   // Поведение приложения
   autoLaunch: boolean;
   minimizeToTray: boolean;
+  startMinimized: boolean; // 🚀 Запускаться свёрнутым в трей при автозапуске
   notifications: boolean;
   isFirstRun: boolean; // 🆕 Флаг первого запуска для показа popup автозапуска
   

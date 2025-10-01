@@ -24,6 +24,7 @@ const store = new Store<AppSettings>({
     autoLaunch: false,
     notifications: true,
     minimizeToTray: true,
+    startMinimized: true, // 🚀 Запускаться свёрнутым в трей при автозапуске
     isFirstRun: true, // 🆕 По умолчанию считаем первым запуском
     windowBounds: { width: 800, height: 600, x: undefined, y: undefined }
   }
@@ -122,6 +123,9 @@ class CloudChefPrintAgent {
       
       // 🆕 Проверка первого запуска и предложение включить автозапуск
       await this.checkFirstRunAndPromptAutoLaunch();
+      
+      // 🔗 Автоматическое подключение к последнему ресторану
+      await this.autoConnectToRestaurant();
       
       // Проверка подключения при запуске
       this.checkConnection();
@@ -342,7 +346,25 @@ class CloudChefPrintAgent {
     // Обработчики окна
     this.mainWindow.on('ready-to-show', () => {
       if (this.mainWindow) {
-        this.mainWindow.show();
+        // 🚀 При автозапуске сворачиваем в трей, иначе показываем окно
+        const isAutoLaunched = app.getLoginItemSettings().wasOpenedAtLogin;
+        const shouldStartMinimized = store.get('startMinimized');
+        
+        if (isAutoLaunched && shouldStartMinimized) {
+          log.info('🚀 Автозапуск: окно свернуто в трей');
+          this.mainWindow.hide();
+          
+          if (store.get('notifications')) {
+            new Notification({
+              title: 'CloudChef Print Agent',
+              body: '🚀 Агент запущен и свёрнут в трей',
+              silent: true
+            }).show();
+          }
+        } else {
+          log.info('👤 Обычный запуск: показываем окно');
+          this.mainWindow.show();
+        }
       }
     });
 
@@ -511,13 +533,52 @@ class CloudChefPrintAgent {
     }
   }
 
+  private updateTrayMenu(): void {
+    // Обновляем только меню без пересоздания tray
+    if (!this.tray) return;
+    
+    const contextMenu = Menu.buildFromTemplate([
+      {
+        label: 'CloudChef Print Agent',
+        type: 'normal',
+        enabled: false
+      },
+      { type: 'separator' },
+      {
+        label: `Статус: ${this.getStatusText()}`,
+        type: 'normal',
+        enabled: false
+      },
+      { type: 'separator' },
+      {
+        label: 'Показать настройки',
+        type: 'normal',
+        click: () => this.showWindow()
+      },
+      {
+        label: 'Проверить подключение',
+        type: 'normal',
+        click: () => this.checkConnection()
+      },
+      { type: 'separator' },
+      {
+        label: 'Выход',
+        type: 'normal',
+        click: () => {
+          this.isQuiting = true;
+          app.quit();
+        }
+      }
+    ]);
+
+    this.tray.setContextMenu(contextMenu);
+  }
+
   private onConnectionChange(status: ConnectionStatus): void {
     this.connectionStatus = status;
     
-    // Обновление tray меню
-    if (this.tray) {
-      this.createTray();
-    }
+    // Обновление tray меню (БЕЗ пересоздания tray)
+    this.updateTrayMenu();
     
     // Отправка статуса в рендер процесс
     if (this.mainWindow) {
@@ -547,6 +608,31 @@ class CloudChefPrintAgent {
       if (body) {
         new Notification({ title, body, silent: true }).show();
       }
+    }
+  }
+
+  private async autoConnectToRestaurant(): Promise<void> {
+    const savedCode = store.get('restaurantCode');
+    
+    if (savedCode) {
+      log.info(`🔗 Автоматическое подключение к ресторану: ${savedCode}`);
+      
+      try {
+        await this.socketManager.connectToRestaurant(savedCode);
+        log.info('✅ Автоматически подключено к ресторану');
+        
+        if (store.get('notifications')) {
+          new Notification({
+            title: 'CloudChef Print Agent',
+            body: `Подключено к ресторану (код: ${savedCode})`,
+            silent: true
+          }).show();
+        }
+      } catch (error) {
+        log.error('❌ Ошибка автоматического подключения:', error);
+      }
+    } else {
+      log.info('ℹ️ Нет сохранённого кода ресторана для автоподключения');
     }
   }
 
