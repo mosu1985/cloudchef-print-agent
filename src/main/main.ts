@@ -686,6 +686,12 @@ class CloudChefPrintAgent {
 
   private async executePrint(job: PrintJob): Promise<void> {
     const selectedPrinter = store.get('selectedPrinter');
+    log.info('🖨️ MAIN: Запуск executePrint', {
+      jobId: job.jobId,
+      labelId: job.labelData?.label_id,
+      selectedPrinter,
+      settingsPrinter: this.settings.selectedPrinter
+    });
     
     if (!selectedPrinter) {
       log.error('Принтер не выбран');
@@ -697,6 +703,7 @@ class CloudChefPrintAgent {
       // Получаем офсеты из настроек
       const offsetHorizontal = (store.get('labelOffsetHorizontal') as number) || 0;
       const offsetVertical = (store.get('labelOffsetVertical') as number) || 0;
+      log.info('🖨️ MAIN: Используем офсеты печати', { offsetHorizontal, offsetVertical });
       
       const result = await this.printerManager.printLabel(
         selectedPrinter, 
@@ -718,11 +725,13 @@ class CloudChefPrintAgent {
         //   }).show();
         // }
       } else {
-        throw new Error(result.error || 'Неизвестная ошибка печати');
+        log.error('Ошибка печати: ' + (result.error || 'Неизвестная ошибка'));
+        this.socketManager.sendPrintResult(job.jobId, 'error', result.error || 'Ошибка печати');
+        return;
       }
     } catch (error) {
       log.error('Ошибка печати:', error);
-      this.socketManager.sendPrintResult(job.jobId, 'error', String(error));
+      this.socketManager.sendPrintResult(job.jobId, 'error', error instanceof Error ? error.message : String(error));
       
       // Отключено: Используются только внутренние уведомления в UI
       // if (store.get('notifications')) {
