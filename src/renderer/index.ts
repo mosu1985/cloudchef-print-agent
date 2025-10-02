@@ -497,10 +497,11 @@ class PrintAgentApp {
     
     if (!restaurantCodeInput || !connectBtn) return;
 
-    const code = restaurantCodeInput.value.trim();
-    
-    if (code.length !== 6 || !/^[0-9]{6}$/.test(code)) {
-      this.showNotification('Введите корректный 6-значный код ресторана', 'error');
+    const rawCode = restaurantCodeInput.value.trim().toUpperCase();
+    restaurantCodeInput.value = rawCode;
+
+    if (!/^[A-Z0-9]{8}$/.test(rawCode)) {
+      this.showNotification('Введите корректный 8-символьный код ресторана (буквы и цифры)', 'error');
       return;
     }
 
@@ -508,12 +509,12 @@ class PrintAgentApp {
     connectBtn.disabled = true;
 
     try {
-      const result = await window.electronAPI.connectToRestaurant(code);
+      const result = await window.electronAPI.connectToRestaurant(rawCode);
       
       if (result.success) {
         this.showNotification('Подключение к ресторану...', 'info');
         // Сохраняем код
-        await this.saveSettings({ restaurantCode: code });
+        await this.saveSettings({ restaurantCode: rawCode });
       } else {
         this.showNotification(`Ошибка подключения: ${result.message}`, 'error');
       }
