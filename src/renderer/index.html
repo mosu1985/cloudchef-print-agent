@@ -695,10 +695,10 @@
                             Настройки ресторана
                         </h2>
                         <div class="form-group">
-                            <label class="form-label" for="restaurant-code">Код ресторана (6 цифр)</label>
+                            <label class="form-label" for="restaurant-code">Код ресторана (8 символов)</label>
                             <input type="text" id="restaurant-code" class="form-input" 
-                                   placeholder="123456" maxlength="6" pattern="[0-9]{6}">
-                            <div class="help-text">Введите код из вкладки "Агент" в Kitchen Fresh Labels</div>
+                                   placeholder="A1B2C3D4" maxlength="8" pattern="[A-Za-z0-9]{8}">
+                            <div class="help-text" id="restaurant-code-helper">Введите 8-символьный код из вкладки "Агенты" в CloudChef</div>
                         </div>
                         <div class="form-group">
                             <button class="btn btn-primary" id="connect-btn">

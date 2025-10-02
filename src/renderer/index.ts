@@ -156,8 +156,15 @@ class PrintAgentApp {
     if (restaurantCodeInput) {
       restaurantCodeInput.addEventListener('input', (e) => {
         const target = e.target as HTMLInputElement;
-        // Оставляем только цифры
-        target.value = target.value.replace(/[^0-9]/g, '').substring(0, 6);
+        const cleaned = target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+        target.value = cleaned.substring(0, 8);
+
+        const helper = document.getElementById('restaurant-code-helper');
+        if (helper) {
+          helper.textContent = cleaned.length === 8
+            ? 'Код выглядит корректно'
+            : `Осталось символов: ${Math.max(0, 8 - cleaned.length)}`;
+        }
       });
     }
 
@@ -331,7 +338,14 @@ class PrintAgentApp {
     // Код ресторана
     const restaurantCodeInput = document.getElementById('restaurant-code') as HTMLInputElement;
     if (restaurantCodeInput) {
-      restaurantCodeInput.value = this.settings.restaurantCode;
+      const formatted = (this.settings.restaurantCode || '').toUpperCase();
+      restaurantCodeInput.value = formatted;
+      const helper = document.getElementById('restaurant-code-helper');
+      if (helper) {
+        helper.textContent = formatted.length === 8
+          ? 'Код выглядит корректно'
+          : `Осталось символов: ${Math.max(0, 8 - formatted.length)}`;
+      }
     }
 
     // Чекбоксы
