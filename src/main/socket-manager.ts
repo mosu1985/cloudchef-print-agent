@@ -145,7 +145,11 @@ export class SocketManager {
       });
 
       this.socket.on('registration_error', (error) => {
-        log.error('Ошибка регистрации агента:', error);
+        log.error('❌ ОШИБКА РЕГИСТРАЦИИ АГЕНТА:', error);
+        log.error('🔍 Проверьте, что код ресторана совпадает с кодом в токене агента!');
+        log.error('🔍 Токен:', this.agentToken?.substring(0, 30) + '...');
+        log.error('🔍 Код из токена:', this.agentToken?.split('_')[1]);
+        log.error('🔍 Код для регистрации:', this.restaurantCode);
         this.onConnectionChange('error');
       });
 
