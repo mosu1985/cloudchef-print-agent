@@ -86,10 +86,18 @@ class CloudChefPrintAgent {
 
   private setupAutoUpdater(): void {
     autoUpdater.logger = log;
+    
+    // 🔄 Проверка обновлений при старте
     autoUpdater.checkForUpdatesAndNotify();
 
-    autoUpdater.on('update-available', () => {
-      log.info('Обновление доступно');
+    // ⏰ Периодическая проверка обновлений каждые 3 часа
+    setInterval(() => {
+      log.info('🔍 Периодическая проверка обновлений...');
+      autoUpdater.checkForUpdatesAndNotify();
+    }, 3 * 60 * 60 * 1000); // 3 часа
+
+    autoUpdater.on('update-available', (info) => {
+      log.info('🎉 Обновление доступно:', info.version);
       if (this.mainWindow) {
         this.mainWindow.webContents.send('update-available');
       }
