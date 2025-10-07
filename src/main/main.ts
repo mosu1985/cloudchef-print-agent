@@ -18,6 +18,7 @@ const store = new Store<AppSettings>({
   defaults: {
     serverUrl: 'https://cloudchef-print-server.onrender.com',
     restaurantCode: '',
+    agentToken: '', // 🔑 Токен аутентификации агента (будет сгенерирован на сервере)
     selectedPrinter: '',
     labelOffsetHorizontal: 0, // 🖨️ Горизонтальное смещение в мм
     labelOffsetVertical: 0,    // 🖨️ Вертикальное смещение в мм
@@ -30,18 +31,23 @@ const store = new Store<AppSettings>({
   }
 });
 
-// 🚀 Автозапуск - конфигурация для всех ОС
-const autoLauncher = new AutoLaunch({
-  name: 'CloudChef Print Agent',
-  path: app.getPath('exe')
-});
+// 🚀 Автозапуск - конфигурация для всех ОС (lazy initialization)
+let autoLauncher: AutoLaunch | null = null;
 
-// 📝 Логирование конфигурации автозапуска
-log.info(`Автозапуск настроен для ${process.platform}:`, {
-  name: 'CloudChef Print Agent',
-  path: app.getPath('exe'),
-  platform: process.platform
-});
+function getAutoLauncher(): AutoLaunch {
+  if (!autoLauncher) {
+    autoLauncher = new AutoLaunch({
+      name: 'CloudChef Print Agent',
+      path: app.getPath('exe')
+    });
+    log.info(`Автозапуск настроен для ${process.platform}:`, {
+      name: 'CloudChef Print Agent',
+      path: app.getPath('exe'),
+      platform: process.platform
+    });
+  }
+  return autoLauncher;
+}
 
 class CloudChefPrintAgent {
   private mainWindow: BrowserWindow | null = null;
@@ -57,17 +63,23 @@ class CloudChefPrintAgent {
     this.socketManager = new SocketManager(store.get('serverUrl'), this.onConnectionChange.bind(this));
     this.printerManager = new PrinterManager();
     
+    // 🔑 Загружаем токен из настроек
+    const savedToken = store.get('agentToken');
+    if (savedToken) {
+      this.socketManager.setAgentToken(savedToken);
+      log.info('🔑 Токен агента загружен из настроек');
+    } else {
+      log.warn('⚠️ Токен агента не найден - требуется настройка');
+    }
+    
     // Привязка метода обработки печати
     (this.socketManager as any).onPrintJob = this.onPrintJob.bind(this);
     
     log.info('Менеджеры инициализированы');
-    
-    // Настройка автообновлений
-    this.setupAutoUpdater();
-    
+
     // Настройка обработчиков приложения
     this.setupAppHandlers();
-    
+
     // Настройка IPC обработчиков
     this.setupIpcHandlers();
   }
@@ -117,16 +129,16 @@ class CloudChefPrintAgent {
       this.createTray();
       this.createWindow();
       this.setupAutoLaunch();
-      
+
       // 🔄 Настройка автообновления
       this.setupAutoUpdater();
-      
+
       // 🆕 Проверка первого запуска и предложение включить автозапуск
       await this.checkFirstRunAndPromptAutoLaunch();
-      
+
       // 🔗 Автоматическое подключение к последнему ресторану
       await this.autoConnectToRestaurant();
-      
+
       // Проверка подключения при запуске
       this.checkConnection();
     });
@@ -169,6 +181,11 @@ class CloudChefPrintAgent {
       // Применяем изменения
       if (settings.restaurantCode) {
         this.socketManager.setRestaurantCode(settings.restaurantCode);
+      }
+      
+      // 🔑 Обновляем токен в socket manager
+      if (settings.agentToken !== undefined) {
+        this.socketManager.setAgentToken(settings.agentToken);
       }
       
       if (settings.autoLaunch !== undefined) {
@@ -426,13 +443,14 @@ class CloudChefPrintAgent {
     const shouldAutoLaunch = store.get('autoLaunch');
     
     try {
-      const isEnabled = await autoLauncher.isEnabled();
-      
+      const launcher = getAutoLauncher();
+      const isEnabled = await launcher.isEnabled();
+
       if (shouldAutoLaunch && !isEnabled) {
-        await autoLauncher.enable();
+        await launcher.enable();
         log.info('Автозапуск включен');
       } else if (!shouldAutoLaunch && isEnabled) {
-        await autoLauncher.disable();
+        await launcher.disable();
         log.info('Автозапуск отключен');
       }
     } catch (error) {
@@ -453,7 +471,8 @@ class CloudChefPrintAgent {
     
     try {
       // Проверяем текущее состояние автозапуска в системе
-      const isAutoLaunchEnabled = await autoLauncher.isEnabled();
+      const launcher = getAutoLauncher();
+      const isAutoLaunchEnabled = await launcher.isEnabled();
       const autoLaunchSetting = store.get('autoLaunch');
       
       log.info('Состояние автозапуска:', {
@@ -490,7 +509,7 @@ class CloudChefPrintAgent {
       if (result.response === 0) {
         // Пользователь согласился включить автозапуск
         try {
-          await autoLauncher.enable();
+          await launcher.enable();
           store.set('autoLaunch', true);
           log.info('✅ Пользователь включил автозапуск при первом запуске');
           
@@ -688,9 +707,8 @@ class CloudChefPrintAgent {
     const selectedPrinter = store.get('selectedPrinter');
     log.info('🖨️ MAIN: Запуск executePrint', {
       jobId: job.jobId,
-      labelId: job.labelData?.label_id,
-      selectedPrinter,
-      settingsPrinter: this.settings.selectedPrinter
+      labelId: job.labelData?.labelId,
+      selectedPrinter
     });
     
     if (!selectedPrinter) {

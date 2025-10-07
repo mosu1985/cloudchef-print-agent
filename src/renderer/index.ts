@@ -168,6 +168,29 @@ class PrintAgentApp {
       });
     }
 
+    // 🔑 Токен агента - обработка вставки
+    const agentTokenInput = document.getElementById('agent-token') as HTMLInputElement;
+    if (agentTokenInput) {
+      agentTokenInput.addEventListener('input', (e) => {
+        const target = e.target as HTMLInputElement;
+        const token = target.value.trim();
+        
+        // Сохраняем токен автоматически при вставке
+        if (token && token.startsWith('agent_')) {
+          this.saveSettings({ agentToken: token });
+          
+          const helper = document.getElementById('agent-token-helper');
+          if (helper) {
+            helper.textContent = '✅ Токен сохранён!';
+            helper.style.color = '#48bb78';
+          }
+        }
+      });
+      
+      // Разрешаем редактирование для вставки токена
+      agentTokenInput.removeAttribute('readonly');
+    }
+
     // Монитор этикеток
     const autoScrollBtn = document.getElementById('auto-scroll-btn');
     if (autoScrollBtn) {
@@ -348,6 +371,22 @@ class PrintAgentApp {
       }
     }
 
+    // 🔑 Токен агента
+    const agentTokenInput = document.getElementById('agent-token') as HTMLInputElement;
+    if (agentTokenInput) {
+      agentTokenInput.value = this.settings.agentToken || '';
+      const helper = document.getElementById('agent-token-helper');
+      if (helper) {
+        if (this.settings.agentToken) {
+          helper.textContent = '✅ Токен установлен';
+          helper.style.color = '#48bb78';
+        } else {
+          helper.textContent = '⚠️ Токен не установлен. Сгенерируйте токен в веб-приложении CloudChef.';
+          helper.style.color = '#f6ad55';
+        }
+      }
+    }
+
     // Чекбоксы
     const autoLaunchCheckbox = document.getElementById('auto-launch') as HTMLInputElement;
     if (autoLaunchCheckbox) {
@@ -493,11 +532,13 @@ class PrintAgentApp {
 
   private async handleConnect(): Promise<void> {
     const restaurantCodeInput = document.getElementById('restaurant-code') as HTMLInputElement;
+    const agentTokenInput = document.getElementById('agent-token') as HTMLInputElement;
     const connectBtn = document.getElementById('connect-btn') as HTMLButtonElement;
     
-    if (!restaurantCodeInput || !connectBtn) return;
+    if (!restaurantCodeInput || !connectBtn || !agentTokenInput) return;
 
     const rawCode = restaurantCodeInput.value.trim().toUpperCase();
+    const agentToken = agentTokenInput.value.trim();
     restaurantCodeInput.value = rawCode;
 
     if (!/^[A-Z0-9]{8}$/.test(rawCode)) {
@@ -505,16 +546,26 @@ class PrintAgentApp {
       return;
     }
 
+    // 🔑 Проверяем наличие токена
+    if (!agentToken || !agentToken.startsWith('agent_')) {
+      this.showNotification('⚠️ Введите токен агента. Получите его в веб-приложении CloudChef во вкладке "Агенты"', 'error');
+      return;
+    }
+
     connectBtn.innerHTML = '<span class="spinner"></span> Подключение...';
     connectBtn.disabled = true;
 
     try {
+      // Сохраняем код и токен перед подключением
+      await this.saveSettings({ 
+        restaurantCode: rawCode,
+        agentToken: agentToken 
+      });
+      
       const result = await window.electronAPI.connectToRestaurant(rawCode);
       
       if (result.success) {
         this.showNotification('Подключение к ресторану...', 'info');
-        // Сохраняем код
-        await this.saveSettings({ restaurantCode: rawCode });
       } else {
         this.showNotification(`Ошибка подключения: ${result.message}`, 'error');
       }

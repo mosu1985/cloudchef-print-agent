@@ -6,6 +6,7 @@ export class SocketManager {
   private socket: Socket | null = null;
   private serverUrl: string;
   private restaurantCode: string = '';
+  private agentToken: string = ''; // 🔑 Токен аутентификации агента
   private onConnectionChange: (status: ConnectionStatus) => void;
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
@@ -31,6 +32,10 @@ export class SocketManager {
 
   public setRestaurantCode(code: string): void {
     this.restaurantCode = code;
+  }
+
+  public setAgentToken(token: string): void {
+    this.agentToken = token;
   }
 
   public async connectToRestaurant(code: string): Promise<{ success: boolean; message?: string }> {
@@ -62,7 +67,13 @@ export class SocketManager {
         timeout: 20000,
         reconnection: true,
         reconnectionDelay: 2000,
-        reconnectionAttempts: this.maxReconnectAttempts
+        reconnectionAttempts: this.maxReconnectAttempts,
+        auth: {
+          token: this.agentToken, // 🔑 Передаём токен для аутентификации
+        },
+        query: {
+          clientType: 'agent' // Указываем тип клиента
+        }
       });
 
       // 🔗 Подключение установлено

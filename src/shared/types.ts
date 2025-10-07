@@ -57,6 +57,7 @@ export interface AppSettings {
   // Сервер и подключение
   serverUrl: string;
   restaurantCode: string;
+  agentToken: string; // 🔑 Токен аутентификации агента
   
   // Принтер
   selectedPrinter: string;
