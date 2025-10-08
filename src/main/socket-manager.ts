@@ -12,6 +12,10 @@ export class SocketManager {
   private maxReconnectAttempts = 5;
   private heartbeatInterval: NodeJS.Timeout | null = null;
   private isRegistered: boolean = false;
+  private registrationTimeout: NodeJS.Timeout | null = null;
+  private registrationRetryInterval: NodeJS.Timeout | null = null;
+  private registrationRetries: number = 0;
+  private maxRegistrationRetries: number = 5;
 
   constructor(serverUrl: string, onConnectionChange: (status: ConnectionStatus) => void) {
     this.serverUrl = serverUrl;
@@ -99,13 +103,20 @@ export class SocketManager {
         // Регистрация происходит только при первом подключении
         // При переподключении используется событие 'reconnect'
         if (this.restaurantCode && !this.isRegistered) {
-          // Даём серверу время обработать middleware и настроить обработчики
-          setTimeout(() => {
+          // Очищаем предыдущие таймеры если есть
+          this.clearRegistrationTimers();
+          this.registrationRetries = 0;
+          
+          // Даём серверу время обработать middleware и настроить обработчики (5 секунд для Render.com cold start)
+          log.info('⏰ Ожидание 5 секунд перед регистрацией агента (Render.com cold start)...');
+          this.registrationTimeout = setTimeout(() => {
             if (this.socket?.connected && !this.isRegistered) {
-              log.info('⏰ Задержка завершена, отправляем регистрацию агента');
+              log.info('⏰ Задержка завершена, отправляем регистрацию агента (попытка 1)');
               this.registerAsAgent();
+              // Запускаем retry механизм
+              this.startRegistrationRetry();
             }
-          }, 2000); // 2000ms задержка для Render.com cold start
+          }, 5000); // 5000ms задержка для Render.com cold start
         }
         
         this.startHeartbeat();
@@ -149,6 +160,7 @@ export class SocketManager {
         log.info('Отключен от сервера:', reason);
         this.onConnectionChange('disconnected');
         this.stopHeartbeat();
+        this.clearRegistrationTimers(); // Очищаем таймеры регистрации
         this.isRegistered = false; // Сбрасываем флаг при отключении
         
         if (reason === 'io server disconnect') {
@@ -161,6 +173,7 @@ export class SocketManager {
       this.socket.on('agent_registered', () => {
         log.info('✅ Агент зарегистрирован в ресторане');
         this.isRegistered = true;
+        this.clearRegistrationTimers(); // Останавливаем retry после успешной регистрации
         this.onConnectionChange('connected');
       });
 
@@ -263,6 +276,42 @@ export class SocketManager {
     }
   }
 
+  private clearRegistrationTimers(): void {
+    if (this.registrationTimeout) {
+      clearTimeout(this.registrationTimeout);
+      this.registrationTimeout = null;
+    }
+    if (this.registrationRetryInterval) {
+      clearInterval(this.registrationRetryInterval);
+      this.registrationRetryInterval = null;
+    }
+    this.registrationRetries = 0;
+  }
+
+  private startRegistrationRetry(): void {
+    // Повторяем попытку регистрации каждые 3 секунды, максимум 5 раз
+    this.registrationRetryInterval = setInterval(() => {
+      if (this.isRegistered) {
+        // Уже зарегистрированы, останавливаем retry
+        this.clearRegistrationTimers();
+        return;
+      }
+
+      if (this.registrationRetries >= this.maxRegistrationRetries) {
+        log.error(`❌ Не удалось зарегистрировать агента после ${this.maxRegistrationRetries} попыток`);
+        log.error('🔍 Проверьте подключение к серверу и попробуйте перезапустить агент');
+        this.clearRegistrationTimers();
+        return;
+      }
+
+      if (this.socket?.connected && !this.isRegistered) {
+        this.registrationRetries++;
+        log.info(`🔄 Повторная попытка регистрации агента (попытка ${this.registrationRetries + 1}/${this.maxRegistrationRetries + 1})`);
+        this.registerAsAgent();
+      }
+    }, 3000); // Повторяем каждые 3 секунды
+  }
+
   public sendPrintResult(jobId: string, status: 'success' | 'error', message: string): void {
     if (!this.socket?.connected) {
       log.error('Не удается отправить результат печати: нет подключения');
@@ -300,6 +349,7 @@ export class SocketManager {
     if (this.socket) {
       log.info('Отключение от сервера');
       this.stopHeartbeat();
+      this.clearRegistrationTimers();
       this.socket.disconnect();
       this.socket = null;
     }
