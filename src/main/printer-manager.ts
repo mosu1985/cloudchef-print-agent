@@ -339,9 +339,32 @@ export class PrinterManager {
   }
   
   private async printHTMLDirectly(printerName: string, html: string, offsetHorizontal: number, offsetVertical: number, copies: number = 1): Promise<boolean> {
-    return new Promise((resolve, reject) => {
-      log.info('🖨️ ПРЯМАЯ ПЕЧАТЬ HTML (как в старой версии)');
+    // 🔧 FIX: Печатаем по 1 копии N раз для правильной калибровки термопринтера
+    log.info(`🖨️ ПРЯМАЯ ПЕЧАТЬ HTML: ${copies} копий`);
+    
+    for (let i = 1; i <= copies; i++) {
+      log.info(`📄 Печать копии ${i}/${copies}`);
       
+      const success = await this.printSingleLabelHTML(printerName, html, offsetHorizontal, offsetVertical);
+      
+      if (!success) {
+        log.error(`❌ Ошибка печати копии ${i}/${copies}`);
+        return false;
+      }
+      
+      // ⏱️ Пауза между копиями для калибровки принтера (особенно важно для термопринтеров)
+      if (i < copies) {
+        log.info('⏸️ Пауза 500ms для калибровки принтера...');
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+    
+    log.info(`✅ Все ${copies} копий напечатаны успешно`);
+    return true;
+  }
+  
+  private async printSingleLabelHTML(printerName: string, html: string, offsetHorizontal: number, offsetVertical: number): Promise<boolean> {
+    return new Promise((resolve, reject) => {
       // Создаем невидимое окно для печати
       const printWindow = new BrowserWindow({
         show: false,
@@ -385,7 +408,7 @@ export class PrinterManager {
           silent: true,                      // ✅ Без диалогов
           printBackground: true,              // ✅ Печатает фоны
           deviceName: printerName,
-          copies: copies,
+          copies: 1,                         // ✅ FIX: ВСЕГДА 1 копия для правильной калибровки
           margins: { marginType: 'none' as const },   // ✅ Без отступов
           dpi: {                             // ✅ КРИТИЧНО для термопринтеров!
             horizontal: 203,

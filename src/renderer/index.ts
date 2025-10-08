@@ -151,6 +151,24 @@ class PrintAgentApp {
       });
     }
 
+    const clearLogsBtn = document.getElementById('clear-logs-btn');
+    if (clearLogsBtn) {
+      clearLogsBtn.addEventListener('click', async () => {
+        if (confirm('Вы уверены, что хотите очистить все логи?')) {
+          try {
+            const result = await window.electronAPI.clearLogs();
+            if (result && result.success) {
+              alert('✅ Логи успешно очищены');
+            } else {
+              alert('❌ Ошибка при очистке логов: ' + (result.error || 'Неизвестная ошибка'));
+            }
+          } catch (error) {
+            alert('❌ Ошибка при очистке логов: ' + error);
+          }
+        }
+      });
+    }
+
     // Код ресторана - автоформатирование
     const restaurantCodeInput = document.getElementById('restaurant-code') as HTMLInputElement;
     if (restaurantCodeInput) {

@@ -2,6 +2,7 @@ import { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, Notification, she
 import { autoUpdater } from 'electron-updater';
 import * as path from 'path';
 import * as fs from 'fs';
+import { promises as fsPromises } from 'fs';
 import * as log from 'electron-log';
 import Store from 'electron-store';
 import AutoLaunch from 'auto-launch';
@@ -257,6 +258,29 @@ class CloudChefPrintAgent {
 
     ipcMain.handle('open-logs', () => {
       shell.openPath(log.transports.file.getFile().path);
+    });
+
+    ipcMain.handle('clear-logs', async () => {
+      try {
+        const logFilePath = log.transports.file.getFile().path;
+        const dir = path.dirname(logFilePath);
+        
+        // Временно отключаем file transport
+        const originalLevel = log.transports.file.level;
+        log.transports.file.level = false;
+        
+        // Очищаем файл
+        await fsPromises.writeFile(logFilePath, '');
+        
+        // Включаем обратно
+        log.transports.file.level = originalLevel;
+        
+        log.info('🗑️ Логи очищены пользователем');
+        return { success: true };
+      } catch (error) {
+        log.error('❌ Ошибка при очистке логов:', error);
+        return { success: false, error: String(error) };
+      }
     });
     
     log.info('✅ MAIN: IPC обработчики настроены');

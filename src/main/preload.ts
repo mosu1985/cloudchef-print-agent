@@ -6,6 +6,7 @@ const electronAPI = {
   // 📱 Приложение
   getAppVersion: (): Promise<string> => ipcRenderer.invoke('get-app-version'),
   openLogs: (): Promise<void> => ipcRenderer.invoke('open-logs'),
+  clearLogs: (): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('clear-logs'),
   
   // ⚙️ Настройки
   getSettings: (): Promise<AppSettings> => ipcRenderer.invoke('get-settings'),
