@@ -36,6 +36,19 @@ export class SocketManager {
 
   public setAgentToken(token: string): void {
     this.agentToken = token;
+    
+    // 🔍 Извлекаем код ресторана из токена
+    // Формат токена: agent_<restaurantCode>_<randomKey>
+    const tokenPattern = /^agent_([A-Z0-9]{8})_[a-f0-9]{32}$/;
+    const match = token.match(tokenPattern);
+    
+    if (match && match[1]) {
+      const restaurantCode = match[1];
+      this.restaurantCode = restaurantCode;
+      log.info('🔑 Код ресторана извлечен из токена', { restaurantCode });
+    } else {
+      log.warn('⚠️ Не удалось извлечь код ресторана из токена - неверный формат');
+    }
   }
 
   public async connectToRestaurant(code: string): Promise<{ success: boolean; message?: string }> {
@@ -86,7 +99,13 @@ export class SocketManager {
         // Регистрация происходит только при первом подключении
         // При переподключении используется событие 'reconnect'
         if (this.restaurantCode && !this.isRegistered) {
-          this.registerAsAgent();
+          // Даём серверу время обработать middleware и настроить обработчики
+          setTimeout(() => {
+            if (this.socket?.connected && !this.isRegistered) {
+              log.info('⏰ Задержка завершена, отправляем регистрацию агента');
+              this.registerAsAgent();
+            }
+          }, 2000); // 2000ms задержка для Render.com cold start
         }
         
         this.startHeartbeat();
@@ -140,7 +159,8 @@ export class SocketManager {
 
       // 📥 Регистрация агента
       this.socket.on('agent_registered', () => {
-        log.info('Агент зарегистрирован в ресторане');
+        log.info('✅ Агент зарегистрирован в ресторане');
+        this.isRegistered = true;
         this.onConnectionChange('connected');
       });
 
@@ -219,7 +239,7 @@ export class SocketManager {
     
     log.info('🚀 Отправка данных регистрации агента:', registrationData);
     this.socket.emit('register_agent', registrationData);
-    this.isRegistered = true;
+    // isRegistered устанавливается в true после получения agent_registered
   }
 
   private startHeartbeat(): void {
