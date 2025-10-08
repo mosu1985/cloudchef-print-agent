@@ -352,15 +352,45 @@ export class PrinterManager {
         return false;
       }
       
-      // ⏱️ Пауза между копиями для калибровки принтера (особенно важно для термопринтеров)
+      // ⏱️ Увеличенная пауза между копиями для TSC термопринтера (2 секунды)
       if (i < copies) {
-        log.info('⏸️ Пауза 500ms для калибровки принтера...');
-        await new Promise(resolve => setTimeout(resolve, 500));
+        log.info('⏸️ Пауза 2000ms для калибровки TSC термопринтера...');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // 🖨️ Отправляем команду feed для калибровки черной метки (если поддерживается принтером)
+        try {
+          await this.sendPrinterCalibrationCommand(printerName);
+        } catch (err) {
+          log.warn('⚠️ Команда калибровки не поддерживается, продолжаем с паузой');
+        }
       }
     }
     
     log.info(`✅ Все ${copies} копий напечатаны успешно`);
     return true;
+  }
+  
+  private async sendPrinterCalibrationCommand(printerName: string): Promise<void> {
+    // Отправляем пустую страницу для прогона ленты и калибровки черной метки
+    const platform = process.platform;
+    
+    if (platform === 'darwin') {
+      // macOS: используем lp с опцией feed
+      return new Promise((resolve, reject) => {
+        exec(`echo "" | lp -d "${printerName}" -o media=Custom.60x40mm`, (error) => {
+          if (error) {
+            log.warn('Команда feed не выполнена:', error.message);
+          }
+          resolve(); // Не блокируем печать при ошибке
+        });
+      });
+    } else if (platform === 'win32') {
+      // Windows: отправка пустого задания для прогона ленты
+      log.info('⚠️ Команда калибровки не реализована для Windows, используется только пауза');
+      return Promise.resolve();
+    }
+    
+    return Promise.resolve();
   }
   
   private async printSingleLabelHTML(printerName: string, html: string, offsetHorizontal: number, offsetVertical: number): Promise<boolean> {
