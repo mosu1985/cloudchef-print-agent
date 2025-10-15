@@ -704,7 +704,8 @@
                         <div class="form-group">
                             <label class="form-label" for="agent-token">🔑 Токен агента</label>
                             <input type="text" id="agent-token" class="form-input" 
-                                   placeholder="agent_A1B2C3D4_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" readonly>
+                                   placeholder="" readonly
+                                   onload="console.log('🔍 DEBUG: Поле agent-token загружено, значение:', this.value)">
                             <div class="help-text" id="agent-token-helper">Токен генерируется в веб-приложении CloudChef во вкладке "Агенты"</div>
                         </div>
                         <div class="form-group">

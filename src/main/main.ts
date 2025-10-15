@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, Notification, shell, dialog } from 'electron';
+import { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, Notification, shell, dialog, Event } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -253,7 +253,8 @@ class CloudChefPrintAgent {
 
     // Системные
     ipcMain.handle('get-app-version', () => {
-      return app.getVersion();
+      // Возвращаем версию приложения из package.json, а не версию Electron
+      return process.env.npm_package_version || '1.1.2';
     });
 
     ipcMain.handle('open-logs', () => {
@@ -378,7 +379,7 @@ class CloudChefPrintAgent {
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
-        preload: path.join(__dirname, 'preload.js')
+        preload: path.join(__dirname, '../preload/preload.js')
       },
       show: false,
       titleBarStyle: 'default' // Нормальный заголовок для всех платформ
@@ -439,7 +440,7 @@ class CloudChefPrintAgent {
       }
     });
 
-    this.mainWindow.on('minimize', (event: Event) => {
+    (this.mainWindow as any).on('minimize', (event: Event) => {
       if (store.get('minimizeToTray') && this.tray) {
         event.preventDefault();
         this.mainWindow?.hide();
@@ -478,15 +479,21 @@ class CloudChefPrintAgent {
       const launcher = getAutoLauncher();
       const isEnabled = await launcher.isEnabled();
 
-      if (shouldAutoLaunch && !isEnabled) {
-        await launcher.enable();
-        log.info('Автозапуск включен');
-      } else if (!shouldAutoLaunch && isEnabled) {
+      if (shouldAutoLaunch) {
+        // 🔧 ИСПРАВЛЕНИЕ: Принудительно пересоздаём запись для обновления пути
+        // Это важно после обновления приложения или переустановки
+        if (isEnabled) {
+          log.info('⚙️ Обнаружена существующая запись автозапуска, обновляем путь...');
+          await launcher.disable(); // Удаляем старую запись
+        }
+        await launcher.enable(); // Создаём новую с актуальным путём
+        log.info('✅ Автозапуск включен (путь обновлён)');
+      } else if (isEnabled) {
         await launcher.disable();
-        log.info('Автозапуск отключен');
+        log.info('❌ Автозапуск отключен');
       }
     } catch (error) {
-      log.error('Ошибка настройки автозапуска:', error);
+      log.error('❌ Ошибка настройки автозапуска:', error);
     }
   }
 

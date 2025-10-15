@@ -224,7 +224,7 @@ export class PrinterManager {
     
     try {
       // Создаем простой текстовый файл для тестирования
-      const testText = 'Hello World Bomond';
+      const testText = 'CloudChef Print Agent Test';
       const tempFile = path.join(os.tmpdir(), `test-print-${Date.now()}.txt`);
       fs.writeFileSync(tempFile, testText, 'utf8');
       

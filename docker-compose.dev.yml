@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  print-agent-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cloudchef-print-agent-dev
+    volumes:
+      # Монтируем исходный код для hot reload
+      - ./src:/home/developer/app/src
+      - ./out:/home/developer/app/out
+      # Сохраняем node_modules в volume для производительности
+      - node_modules:/home/developer/app/node_modules
+    environment:
+      - DISPLAY=:99
+      - ELECTRON_DISABLE_GPU=1
+      - ELECTRON_NO_SANDBOX=1
+      - NODE_ENV=development
+    # VNC порт для просмотра GUI
+    ports:
+      - "5900:5900"  # VNC для просмотра GUI
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+
+volumes:
+  node_modules:

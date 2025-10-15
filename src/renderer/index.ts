@@ -392,7 +392,8 @@ class PrintAgentApp {
     // 🔑 Токен агента
     const agentTokenInput = document.getElementById('agent-token') as HTMLInputElement;
     if (agentTokenInput) {
-      agentTokenInput.value = this.settings.agentToken || '';
+      const tokenValue = this.settings.agentToken || '';
+      agentTokenInput.value = tokenValue;
       const helper = document.getElementById('agent-token-helper');
       if (helper) {
         if (this.settings.agentToken) {
