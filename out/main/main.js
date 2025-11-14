@@ -185,9 +185,7 @@ class CloudChefPrintAgent {
         log.info('🔧 MAIN: Настройка IPC обработчиков...');
         // Настройки
         electron_1.ipcMain.handle('get-settings', () => {
-            const settings = store.store;
-            log.info('🔍 DEBUG: Возвращаем настройки:', settings);
-            return settings;
+            return store.store;
         });
         electron_1.ipcMain.handle('save-settings', (_, settings) => {
             // Удаляем serverUrl из настроек - он теперь захардкожен

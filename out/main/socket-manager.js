@@ -315,7 +315,6 @@ class SocketManager {
         });
     }
     checkConnection() {
-        log.info('🔍 DEBUG: checkConnection - restaurantCode:', this.restaurantCode, 'socket connected:', this.socket?.connected);
         if (this.socket?.connected) {
             log.info('Подключение активно');
             if (this.restaurantCode && !this.isRegistered) {
@@ -329,7 +328,6 @@ class SocketManager {
         else {
             log.info('Подключение отсутствует, попытка подключения...');
             if (this.restaurantCode) {
-                log.info('🔍 DEBUG: Автоматическое подключение к ресторану:', this.restaurantCode);
                 this.connectToRestaurant(this.restaurantCode);
             }
         }

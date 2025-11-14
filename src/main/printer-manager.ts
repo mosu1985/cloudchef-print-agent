@@ -420,7 +420,12 @@ export class PrinterManager {
       let printStarted = false;
       
       // Функция для проверки загрузки всех изображений
+      let checkInterval: NodeJS.Timeout | null = null;
+      let checkAttempts = 0;
+      const maxCheckAttempts = 20; // Максимум 20 попыток (20 * 500ms = 10 секунд)
+      
       const checkImagesLoaded = () => {
+        checkAttempts++;
         printWindow.webContents.executeJavaScript(`
           (function() {
             const images = document.querySelectorAll('img');
@@ -443,11 +448,12 @@ export class PrinterManager {
                   else if (img.complete && img.naturalHeight === 0) {
                     resolve(false);
                   } 
-                  // Если изображение еще загружается
+                  // Если изображение еще загружается - проверяем через небольшую задержку
                   else {
+                    // Даем больше времени для загрузки QR-кода из внешнего API
                     const timeout = setTimeout(() => {
                       resolve(false);
-                    }, 5000);
+                    }, 10000); // Увеличено до 10 секунд для надежной загрузки QR-кода
                     
                     img.onload = () => {
                       clearTimeout(timeout);
@@ -472,25 +478,66 @@ export class PrinterManager {
             });
           })()
         `).then((result: any) => {
-          if (result && result.allLoaded) {
+          if (result && result.allLoaded && result.loaded > 0) {
+            // Все изображения загружены успешно
+            if (checkInterval) {
+              clearInterval(checkInterval);
+              checkInterval = null;
+            }
             imagesLoaded = true;
             log.info(`✅ Изображения загружены: ${result.loaded}/${result.total} (ошибок: ${result.errors})`);
             if (loadDone && imagesLoaded) {
-              setTimeout(() => printNow(), 200);
+              setTimeout(() => printNow(), 300); // Небольшая задержка для гарантии рендеринга
             }
           } else if (result && result.total === 0) {
             // Нет изображений - можно печатать сразу
+            if (checkInterval) {
+              clearInterval(checkInterval);
+              checkInterval = null;
+            }
             imagesLoaded = true;
             log.info('✅ Изображений нет, можно печатать');
             if (loadDone && imagesLoaded) {
               setTimeout(() => printNow(), 200);
             }
+          } else if (result && result.loaded > 0 && result.loaded < result.total) {
+            // Частично загружены - продолжаем проверку
+            log.info(`⏳ Частично загружено: ${result.loaded}/${result.total}, продолжаем ожидание...`);
+            if (checkAttempts >= maxCheckAttempts) {
+              // Превышен лимит попыток - печатаем с тем, что есть
+              if (checkInterval) {
+                clearInterval(checkInterval);
+                checkInterval = null;
+              }
+              imagesLoaded = true;
+              log.warn(`⚠️ Превышен лимит попыток загрузки (${maxCheckAttempts}), печатаем с частично загруженными изображениями`);
+              if (loadDone && imagesLoaded) {
+                setTimeout(() => printNow(), 300);
+              }
+            }
+          } else if (checkAttempts >= maxCheckAttempts) {
+            // Превышен лимит попыток - печатаем без изображений
+            if (checkInterval) {
+              clearInterval(checkInterval);
+              checkInterval = null;
+            }
+            imagesLoaded = true;
+            log.warn(`⚠️ Превышен лимит попыток загрузки (${maxCheckAttempts}), печатаем без изображений`);
+            if (loadDone && imagesLoaded) {
+              setTimeout(() => printNow(), 300);
+            }
           }
         }).catch((err) => {
           log.warn('⚠️ Ошибка проверки изображений:', err);
-          imagesLoaded = true; // Продолжаем печать даже если проверка не удалась
-          if (loadDone && imagesLoaded) {
-            setTimeout(() => printNow(), 200);
+          if (checkAttempts >= maxCheckAttempts) {
+            if (checkInterval) {
+              clearInterval(checkInterval);
+              checkInterval = null;
+            }
+            imagesLoaded = true; // Продолжаем печать даже если проверка не удалась
+            if (loadDone && imagesLoaded) {
+              setTimeout(() => printNow(), 300);
+            }
           }
         });
       };
@@ -500,27 +547,49 @@ export class PrinterManager {
         loadDone = true;
         log.info(`✅ HTML готов к печати: ${tag}`);
         
-        // Проверяем загрузку изображений
+        // Начинаем периодическую проверку загрузки изображений каждые 500ms
         setTimeout(() => {
           checkImagesLoaded();
-          // Fallback: если через 3 секунды изображения не загрузились, печатаем все равно
+          // Запускаем периодическую проверку каждые 500ms
+          checkInterval = setInterval(() => {
+            if (!imagesLoaded && checkAttempts < maxCheckAttempts) {
+              checkImagesLoaded();
+            } else if (checkInterval) {
+              clearInterval(checkInterval);
+              checkInterval = null;
+            }
+          }, 500);
+          
+          // Fallback: если через 12 секунд изображения не загрузились, печатаем все равно
           setTimeout(() => {
             if (!imagesLoaded) {
-              log.warn('⚠️ Таймаут загрузки изображений, печатаем без них');
+              if (checkInterval) {
+                clearInterval(checkInterval);
+                checkInterval = null;
+              }
+              log.warn('⚠️ Таймаут загрузки изображений (12 секунд), печатаем без них');
               imagesLoaded = true;
               if (loadDone && imagesLoaded) {
-                setTimeout(() => printNow(), 200);
+                setTimeout(() => printNow(), 300);
               }
             }
-          }, 3000);
-        }, 100);
+          }, 12000); // Увеличено до 12 секунд для надежной загрузки QR-кода
+        }, 200); // Увеличена начальная задержка до 200ms для инициализации изображений
       };
       
       printWindow.webContents.once('did-finish-load', () => finishLoad('did-finish-load'));
       printWindow.webContents.once('dom-ready', () => finishLoad('dom-ready'));
       
-      // Fallback timeout для загрузки (увеличен до 2 секунд для загрузки изображений)
-      const loadTimeout = setTimeout(() => finishLoad('timeout-2s'), 2000);
+      // Очищаем интервал при закрытии окна
+      printWindow.once('closed', () => {
+        if (checkInterval) {
+          clearInterval(checkInterval);
+          checkInterval = null;
+        }
+      });
+      
+      // Fallback timeout для загрузки (увеличен до 5 секунд для загрузки изображений)
+      const loadTimeout = setTimeout(() => finishLoad('timeout-5s'), 5000);
       
       const printNow = () => {
         if (printStarted) {
@@ -529,6 +598,11 @@ export class PrinterManager {
         }
         printStarted = true;
         clearTimeout(loadTimeout);
+        // Очищаем интервал проверки изображений перед печатью
+        if (checkInterval) {
+          clearInterval(checkInterval);
+          checkInterval = null;
+        }
         
         const printOptions = {
           silent: true,                      // ✅ Без диалогов
@@ -552,6 +626,11 @@ export class PrinterManager {
         const printTimeout = setTimeout(() => {
           if (!printDone) {
             log.error('⏱️ Таймаут печати (7 секунд)');
+            // Очищаем интервал при таймауте
+            if (checkInterval) {
+              clearInterval(checkInterval);
+              checkInterval = null;
+            }
             if (!printWindow.isDestroyed()) printWindow.close();
             resolve(false);
           }
