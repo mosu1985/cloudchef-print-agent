@@ -416,22 +416,118 @@ export class PrinterManager {
       printWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(fullHTML)}`);
       
       let loadDone = false;
+      let imagesLoaded = false;
+      let printStarted = false;
+      
+      // Функция для проверки загрузки всех изображений
+      const checkImagesLoaded = () => {
+        printWindow.webContents.executeJavaScript(`
+          (function() {
+            const images = document.querySelectorAll('img');
+            if (images.length === 0) {
+              return Promise.resolve({ loaded: 0, total: 0, errors: 0, allLoaded: true });
+            }
+            
+            let loadedCount = 0;
+            let errorCount = 0;
+            const totalImages = images.length;
+            
+            return Promise.all(
+              Array.from(images).map((img) => {
+                return new Promise((resolve) => {
+                  // Если изображение уже загружено
+                  if (img.complete && img.naturalHeight !== 0) {
+                    resolve(true);
+                  } 
+                  // Если изображение уже загружено, но с ошибкой
+                  else if (img.complete && img.naturalHeight === 0) {
+                    resolve(false);
+                  } 
+                  // Если изображение еще загружается
+                  else {
+                    const timeout = setTimeout(() => {
+                      resolve(false);
+                    }, 5000);
+                    
+                    img.onload = () => {
+                      clearTimeout(timeout);
+                      resolve(true);
+                    };
+                    img.onerror = () => {
+                      clearTimeout(timeout);
+                      resolve(false);
+                    };
+                  }
+                });
+              })
+            ).then((results) => {
+              loadedCount = results.filter(r => r === true).length;
+              errorCount = results.filter(r => r === false).length;
+              return { 
+                loaded: loadedCount, 
+                total: totalImages, 
+                errors: errorCount,
+                allLoaded: loadedCount + errorCount >= totalImages
+              };
+            });
+          })()
+        `).then((result: any) => {
+          if (result && result.allLoaded) {
+            imagesLoaded = true;
+            log.info(`✅ Изображения загружены: ${result.loaded}/${result.total} (ошибок: ${result.errors})`);
+            if (loadDone && imagesLoaded) {
+              setTimeout(() => printNow(), 200);
+            }
+          } else if (result && result.total === 0) {
+            // Нет изображений - можно печатать сразу
+            imagesLoaded = true;
+            log.info('✅ Изображений нет, можно печатать');
+            if (loadDone && imagesLoaded) {
+              setTimeout(() => printNow(), 200);
+            }
+          }
+        }).catch((err) => {
+          log.warn('⚠️ Ошибка проверки изображений:', err);
+          imagesLoaded = true; // Продолжаем печать даже если проверка не удалась
+          if (loadDone && imagesLoaded) {
+            setTimeout(() => printNow(), 200);
+          }
+        });
+      };
+      
       const finishLoad = (tag: string) => {
         if (loadDone) return;
         loadDone = true;
         log.info(`✅ HTML готов к печати: ${tag}`);
         
-        // Печатаем сразу после загрузки
-        setTimeout(() => printNow(), 100);
+        // Проверяем загрузку изображений
+        setTimeout(() => {
+          checkImagesLoaded();
+          // Fallback: если через 3 секунды изображения не загрузились, печатаем все равно
+          setTimeout(() => {
+            if (!imagesLoaded) {
+              log.warn('⚠️ Таймаут загрузки изображений, печатаем без них');
+              imagesLoaded = true;
+              if (loadDone && imagesLoaded) {
+                setTimeout(() => printNow(), 200);
+              }
+            }
+          }, 3000);
+        }, 100);
       };
       
       printWindow.webContents.once('did-finish-load', () => finishLoad('did-finish-load'));
       printWindow.webContents.once('dom-ready', () => finishLoad('dom-ready'));
       
-      // Fallback timeout для загрузки
-      const loadTimeout = setTimeout(() => finishLoad('timeout-500ms'), 500);
+      // Fallback timeout для загрузки (увеличен до 2 секунд для загрузки изображений)
+      const loadTimeout = setTimeout(() => finishLoad('timeout-2s'), 2000);
       
       const printNow = () => {
+        if (printStarted) {
+          log.warn('⚠️ Печать уже начата, пропускаем повторный вызов');
+          return;
+        }
+        printStarted = true;
         clearTimeout(loadTimeout);
         
         const printOptions = {
