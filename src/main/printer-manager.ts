@@ -717,6 +717,7 @@ export class PrinterManager {
       labelData.method ? `МЕТОД: ${labelData.method}` : '',
       labelData.comment ? `КОММЕНТАРИЙ: ${labelData.comment}` : '',
       labelData.labelId ? `ID ЭТИКЕТКИ: ${labelData.labelId}` : '',
+      labelData.workshop ? `${labelData.workshop}` : '',
       '',
       `ДАТА ПЕЧАТИ: ${new Date().toLocaleString('ru-RU')}`,
       `КОПИЙ: ${labelData.copies || 1}`,

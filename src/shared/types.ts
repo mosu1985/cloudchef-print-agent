@@ -13,6 +13,7 @@ export interface LabelData {
   method?: string;
   comment?: string;
   purpose?: string;
+  workshop?: string; // Название цеха/зоны
   
   // HTML и поля для печати
   html?: string; // HTML для печати
