@@ -240,7 +240,7 @@ export class SocketManager {
     log.info(`🔗 Регистрация агента с кодом: ${this.restaurantCode}`);
     
     const printerInfo = {
-      name: 'CloudChef Print Agent',
+      name: 'Print Agent',
       type: 'Thermal Label Printer',
       status: 'ready'
     };
