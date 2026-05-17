@@ -141,7 +141,8 @@ export class SocketManager {
       this.socket.on('connect_error', (error) => {
         clearTimeout(timeout);
         log.error('Ошибка подключения к серверу:', error.message);
-        this.onConnectionChange('error');
+        // Во время периодического переподключения сохраняем статус "переподключение"
+        this.onConnectionChange(this.periodicReconnectTimer ? 'reconnecting' : 'error');
         reject(error);
       });
 
@@ -157,17 +158,18 @@ export class SocketManager {
 
       this.socket.on('reconnect_attempt', (attemptNumber) => {
         log.info(`Попытка переподключения ${attemptNumber}/${this.maxReconnectAttempts}`);
+        this.onConnectionChange('reconnecting');
       });
 
       this.socket.on('reconnect_error', (error) => {
         log.error('Ошибка переподключения:', error.message);
-        this.onConnectionChange('error');
+        this.onConnectionChange('reconnecting');
       });
 
       this.socket.on('reconnect_failed', () => {
-        log.error('Переподключение не удалось');
-        this.onConnectionChange('error');
+        log.error('Переподключение не удалось, переходим на периодические попытки');
         // Быстрые попытки socket.io исчерпаны — включаем 10-минутный цикл
+        // (startPeriodicReconnect сам выставит статус 'reconnecting')
         this.startPeriodicReconnect();
       });
 
@@ -390,6 +392,8 @@ export class SocketManager {
     }
 
     log.info('🔄 Запуск периодического переподключения (раз в 10 минут)');
+    // Сразу показываем статус переподключения, не дожидаясь первого тика через 10 минут
+    this.onConnectionChange('reconnecting');
     this.periodicReconnectTimer = setInterval(() => {
       if (this.isConnected()) {
         this.stopPeriodicReconnect();
@@ -407,7 +411,8 @@ export class SocketManager {
       // Одна попытка без внутренних повторов socket.io (reconnection: false)
       this.connect(false).catch((error) => {
         log.error('Периодическое переподключение не удалось, ждём следующий тик:', error);
-        this.onConnectionChange('disconnected');
+        // Остаёмся в статусе "переподключение" — попытки продолжаются
+        this.onConnectionChange('reconnecting');
       });
     }, this.PERIODIC_RECONNECT_INTERVAL_MS);
   }
