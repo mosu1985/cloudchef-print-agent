@@ -7,7 +7,9 @@ yarn-error.log*
 # 🏗️ Build outputs
 dist/
 release/
-build/
+build/*
+# Кастомные NSIS-скрипты сборщика — это исходники, не артефакты
+!build/installer.nsh
 
 # 📱 Electron
 *.app
