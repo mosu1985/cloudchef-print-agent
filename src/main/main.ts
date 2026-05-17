@@ -702,6 +702,7 @@ class CloudChefPrintAgent {
     switch (this.connectionStatus) {
       case 'connected': return '🟢 Подключено';
       case 'server-connected': return '🟡 Сервер подключен';
+      case 'reconnecting': return '🟡 Переподключение...';
       case 'disconnected': return '🔴 Отключено';
       case 'error': return '❌ Ошибка';
       default: return '⚪ Неизвестно';

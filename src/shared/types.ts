@@ -51,7 +51,7 @@ export interface PrintJob {
 }
 
 // 📡 Статус подключения
-export type ConnectionStatus = 'connected' | 'server-connected' | 'disconnected' | 'error';
+export type ConnectionStatus = 'connected' | 'server-connected' | 'disconnected' | 'error' | 'reconnecting';
 
 // ⚙️ Настройки приложения
 export interface AppSettings {

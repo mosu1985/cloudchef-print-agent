@@ -50,6 +50,8 @@ class SocketManager {
     registrationRetryInterval = null;
     registrationRetries = 0;
     maxRegistrationRetries = 5;
+    periodicReconnectTimer = null;
+    PERIODIC_RECONNECT_INTERVAL_MS = 10 * 60 * 1000; // 10 минут
     constructor(serverUrl, onConnectionChange) {
         this.serverUrl = serverUrl;
         this.onConnectionChange = onConnectionChange;
@@ -85,6 +87,8 @@ class SocketManager {
     }
     async connectToRestaurant(code) {
         this.restaurantCode = code;
+        // Ручное подключение перехватывает управление — останавливаем авто-цикл
+        this.stopPeriodicReconnect();
         try {
             await this.connect();
             return { success: true };
@@ -94,11 +98,17 @@ class SocketManager {
             return { success: false, message: String(error) };
         }
     }
-    async connect() {
-        if (this.socket?.connected) {
-            this.disconnect();
+    async connect(autoReconnect = true) {
+        // Корректно утилизируем прежний сокет (даже отключённый), чтобы при
+        // периодических переподключениях не накапливались мёртвые сокеты с листенерами
+        if (this.socket) {
+            this.socket.removeAllListeners();
+            this.socket.disconnect();
+            this.socket = null;
         }
-        log.info(`Подключение к серверу: ${this.serverUrl}`);
+        this.stopHeartbeat();
+        this.clearRegistrationTimers();
+        log.info(`Подключение к серверу: ${this.serverUrl} (autoReconnect: ${autoReconnect})`);
         return new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {
                 reject(new Error('Таймаут подключения к серверу'));
@@ -106,7 +116,7 @@ class SocketManager {
             this.socket = (0, socket_io_client_1.io)(this.serverUrl, {
                 transports: ['websocket', 'polling'],
                 timeout: 20000,
-                reconnection: true,
+                reconnection: autoReconnect,
                 reconnectionDelay: 2000,
                 reconnectionAttempts: this.maxReconnectAttempts,
                 auth: {
@@ -121,6 +131,10 @@ class SocketManager {
                 clearTimeout(timeout);
                 log.info('Подключение к серверу установлено');
                 this.reconnectAttempts = 0;
+                // Связь восстановлена — останавливаем периодическое переподключение
+                this.stopPeriodicReconnect();
+                // Возвращаем быстрый всплеск socket.io для будущих коротких сбоев
+                this.socket?.io.reconnection(true);
                 this.onConnectionChange('server-connected');
                 // Регистрация происходит только при первом подключении
                 // При переподключении используется событие 'reconnect'
@@ -167,6 +181,8 @@ class SocketManager {
             this.socket.on('reconnect_failed', () => {
                 log.error('Переподключение не удалось');
                 this.onConnectionChange('error');
+                // Быстрые попытки socket.io исчерпаны — включаем 10-минутный цикл
+                this.startPeriodicReconnect();
             });
             // 📡 Отключение
             this.socket.on('disconnect', (reason) => {
@@ -179,6 +195,10 @@ class SocketManager {
                     // Сервер принудительно отключил - переподключаемся
                     this.socket?.connect();
                 }
+                // Запускаем 10-минутную страховку на случай, если быстрые
+                // попытки socket.io не восстановят связь (первый тик — через 10 мин,
+                // он проверит isConnected, поэтому не конфликтует с быстрым всплеском)
+                this.startPeriodicReconnect();
             });
             // 📥 Регистрация агента
             this.socket.on('agent_registered', () => {
@@ -199,7 +219,8 @@ class SocketManager {
             this.socket.on('authentication_error', (error) => {
                 log.error('❌ КРИТИЧЕСКАЯ ОШИБКА: Токен агента недействителен:', error.message);
                 this.onConnectionChange('error');
-                // Останавливаем все попытки переподключения
+                // Останавливаем все попытки переподключения, включая 10-минутный цикл
+                this.stopPeriodicReconnect();
                 this.socket?.removeAllListeners();
                 this.socket?.disconnect();
                 this.socket = null;
@@ -239,7 +260,7 @@ class SocketManager {
         }
         log.info(`🔗 Регистрация агента с кодом: ${this.restaurantCode}`);
         const printerInfo = {
-            name: 'CloudChef Print Agent',
+            name: 'Print Agent',
             type: 'Thermal Label Printer',
             status: 'ready'
         };
@@ -333,6 +354,8 @@ class SocketManager {
         }
     }
     disconnect() {
+        // Ручное отключение пользователем — останавливаем авто-переподключение
+        this.stopPeriodicReconnect();
         if (this.socket) {
             log.info('Отключение от сервера');
             this.stopHeartbeat();
@@ -341,6 +364,40 @@ class SocketManager {
             this.socket = null;
         }
         this.onConnectionChange('disconnected');
+    }
+    /**
+     * Запускает периодическое переподключение раз в 10 минут.
+     * Идемпотентно: повторный вызов при уже работающем таймере ничего не делает.
+     */
+    startPeriodicReconnect() {
+        if (this.periodicReconnectTimer) {
+            return; // цикл уже запущен
+        }
+        log.info('🔄 Запуск периодического переподключения (раз в 10 минут)');
+        this.periodicReconnectTimer = setInterval(() => {
+            if (this.isConnected()) {
+                this.stopPeriodicReconnect();
+                return;
+            }
+            if (!this.restaurantCode) {
+                log.warn('Периодическое переподключение: нет кода ресторана, пропуск тика');
+                return;
+            }
+            log.info('🔄 Периодическая попытка переподключения...');
+            this.onConnectionChange('reconnecting');
+            // Одна попытка без внутренних повторов socket.io (reconnection: false)
+            this.connect(false).catch((error) => {
+                log.error('Периодическое переподключение не удалось, ждём следующий тик:', error);
+                this.onConnectionChange('disconnected');
+            });
+        }, this.PERIODIC_RECONNECT_INTERVAL_MS);
+    }
+    stopPeriodicReconnect() {
+        if (this.periodicReconnectTimer) {
+            clearInterval(this.periodicReconnectTimer);
+            this.periodicReconnectTimer = null;
+            log.info('⏹️ Периодическое переподключение остановлено');
+        }
     }
     isConnected() {
         return this.socket?.connected || false;

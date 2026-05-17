@@ -383,6 +383,11 @@ class PrintAgentApp {
                 text = 'Подключено к серверу';
                 statusClass = 'status-connected';
                 break;
+            case 'reconnecting':
+                icon = '🟡';
+                text = 'Переподключение к серверу…';
+                statusClass = 'status-disconnected';
+                break;
             case 'disconnected':
                 icon = '🔴';
                 text = 'Отключено';
