@@ -250,8 +250,9 @@ class CloudChefPrintAgent {
         });
         // Системные
         electron_1.ipcMain.handle('get-app-version', () => {
-            // Возвращаем версию приложения из package.json, а не версию Electron
-            return process.env.npm_package_version || '1.1.2';
+            // app.getVersion() читает версию из package.json внутри собранного
+            // приложения — работает и в установленном агенте, и в разработке
+            return electron_1.app.getVersion();
         });
         electron_1.ipcMain.handle('open-logs', () => {
             electron_1.shell.openPath(log.transports.file.getFile().path);
