@@ -8,8 +8,8 @@
   "private": true,
   "homepage": "./",
   "scripts": {
-    "dev": "tsc && tsc -p tsconfig.renderer.json && mkdir -p out/renderer && cp src/renderer/index.html out/renderer/index.html && electron out/main/main.js",
-    "build": "tsc && tsc -p tsconfig.renderer.json && mkdir -p out/renderer && cp src/renderer/index.html out/renderer/index.html",
+    "dev": "tsc && tsc -p tsconfig.renderer.json && node scripts/copy-renderer-html.js && electron out/main/main.js",
+    "build": "tsc && tsc -p tsconfig.renderer.json && node scripts/copy-renderer-html.js",
     "preview": "electron-vite preview",
     "electron:pack": "npm run build && electron-builder",
     "electron:dist": "npm run build && electron-builder --publish=never",
