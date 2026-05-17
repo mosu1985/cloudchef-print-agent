@@ -248,7 +248,11 @@ class CloudChefPrintAgent {
     });
 
     ipcMain.handle('restart-and-update', () => {
-      autoUpdater.quitAndInstall();
+      // Полный выход, чтобы обработчик close не свернул окно в трей
+      this.isQuiting = true;
+      // Тихая установка (isSilent=true) — без диалога "закройте приложение";
+      // isForceRunAfter=true — перезапустить агент после обновления
+      autoUpdater.quitAndInstall(true, true);
     });
 
     // Системные

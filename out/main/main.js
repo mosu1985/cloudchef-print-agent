@@ -242,7 +242,11 @@ class CloudChefPrintAgent {
             electron_updater_1.autoUpdater.checkForUpdatesAndNotify();
         });
         electron_1.ipcMain.handle('restart-and-update', () => {
-            electron_updater_1.autoUpdater.quitAndInstall();
+            // Полный выход, чтобы обработчик close не свернул окно в трей
+            this.isQuiting = true;
+            // Тихая установка (isSilent=true) — без диалога "закройте приложение";
+            // isForceRunAfter=true — перезапустить агент после обновления
+            electron_updater_1.autoUpdater.quitAndInstall(true, true);
         });
         // Системные
         electron_1.ipcMain.handle('get-app-version', () => {
