@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, Notification, shell, dialog, Event } from 'electron';
+import { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, Notification, shell, dialog, Event, powerMonitor } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -150,6 +150,17 @@ class CloudChefPrintAgent {
 
       // Проверка подключения при запуске
       this.checkConnection();
+
+      // 💤 Мгновенный реконнект при пробуждении системы / разблокировке экрана
+      // (ноутбук ресторана засыпает на ночь, моргает Wi-Fi — не ждём таймер)
+      powerMonitor.on('resume', () => {
+        log.info('💤➡️ Система проснулась — проверяем подключение');
+        this.checkConnection();
+      });
+      powerMonitor.on('unlock-screen', () => {
+        log.info('🔓 Экран разблокирован — проверяем подключение');
+        this.checkConnection();
+      });
     });
 
     app.on('window-all-closed', () => {

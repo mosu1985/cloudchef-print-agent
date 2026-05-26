@@ -164,6 +164,16 @@ class CloudChefPrintAgent {
             await this.autoConnectToRestaurant();
             // Проверка подключения при запуске
             this.checkConnection();
+            // 💤 Мгновенный реконнект при пробуждении системы / разблокировке экрана
+            // (ноутбук ресторана засыпает на ночь, моргает Wi-Fi — не ждём таймер)
+            electron_1.powerMonitor.on('resume', () => {
+                log.info('💤➡️ Система проснулась — проверяем подключение');
+                this.checkConnection();
+            });
+            electron_1.powerMonitor.on('unlock-screen', () => {
+                log.info('🔓 Экран разблокирован — проверяем подключение');
+                this.checkConnection();
+            });
         });
         electron_1.app.on('window-all-closed', () => {
             // На macOS приложения обычно остаются активными
