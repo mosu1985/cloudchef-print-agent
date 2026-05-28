@@ -53,14 +53,33 @@ function getAutoLauncher(): AutoLaunch {
 class CloudChefPrintAgent {
   private mainWindow: BrowserWindow | null = null;
   private tray: Tray | null = null;
-  private socketManager: SocketManager;
-  private printerManager: PrinterManager;
+  // Инициализируются в конструкторе — но не при отбраковке второго инстанса
+  // (см. requestSingleInstanceLock ниже), поэтому используем definite assignment.
+  private socketManager!: SocketManager;
+  private printerManager!: PrinterManager;
   private connectionStatus: ConnectionStatus = 'disconnected';
   private isQuiting = false;
 
   constructor() {
     log.info('CloudChef Print Agent запускается...');
-    
+
+    // 🔒 Single-instance lock — нельзя запустить вторую копию агента.
+    // Должен вызываться до app.whenReady (конструктор бежит раньше setupAppHandlers).
+    const gotLock = app.requestSingleInstanceLock();
+    if (!gotLock) {
+      log.info('🚪 Другой экземпляр уже запущен — выходим');
+      app.exit(0); // моментально, без before-quit (socketManager в этом инстансе ещё не создан)
+      return;
+    }
+    app.on('second-instance', () => {
+      log.info('👋 Попытка повторного запуска — показываем существующее окно');
+      if (this.mainWindow) {
+        if (this.mainWindow.isMinimized()) this.mainWindow.restore();
+        this.mainWindow.show();
+        this.mainWindow.focus();
+      }
+    });
+
     this.socketManager = new SocketManager(store.get('serverUrl'), this.onConnectionChange.bind(this));
     this.printerManager = new PrinterManager();
     

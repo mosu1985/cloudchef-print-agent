@@ -85,12 +85,31 @@ function getAutoLauncher() {
 class CloudChefPrintAgent {
     mainWindow = null;
     tray = null;
+    // Инициализируются в конструкторе — но не при отбраковке второго инстанса
+    // (см. requestSingleInstanceLock ниже), поэтому используем definite assignment.
     socketManager;
     printerManager;
     connectionStatus = 'disconnected';
     isQuiting = false;
     constructor() {
         log.info('CloudChef Print Agent запускается...');
+        // 🔒 Single-instance lock — нельзя запустить вторую копию агента.
+        // Должен вызываться до app.whenReady (конструктор бежит раньше setupAppHandlers).
+        const gotLock = electron_1.app.requestSingleInstanceLock();
+        if (!gotLock) {
+            log.info('🚪 Другой экземпляр уже запущен — выходим');
+            electron_1.app.exit(0); // моментально, без before-quit (socketManager в этом инстансе ещё не создан)
+            return;
+        }
+        electron_1.app.on('second-instance', () => {
+            log.info('👋 Попытка повторного запуска — показываем существующее окно');
+            if (this.mainWindow) {
+                if (this.mainWindow.isMinimized())
+                    this.mainWindow.restore();
+                this.mainWindow.show();
+                this.mainWindow.focus();
+            }
+        });
         this.socketManager = new socket_manager_1.SocketManager(store.get('serverUrl'), this.onConnectionChange.bind(this));
         this.printerManager = new printer_manager_1.PrinterManager();
         // 🔑 Загружаем токен из настроек
